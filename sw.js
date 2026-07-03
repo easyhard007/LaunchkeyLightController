@@ -1,12 +1,13 @@
-const CACHE_NAME = 'launchkey-station-v1.5';
+const CACHE_NAME = 'launchkey-station-v1.8';
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  './icon.png'
+  './icon.png',
+  // 必须把 Tonal.js 加上，断网时才能从本地调用乐理引擎！
+  'https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js'
 ];
 
-// 安装时缓存所有文件
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -14,12 +15,10 @@ self.addEventListener('install', event => {
   );
 });
 
-// 没网时直接从缓存读取，有网时去网络获取
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // 如果缓存里有，直接返回缓存；没有则去网络请求
         return response || fetch(event.request);
       })
   );
