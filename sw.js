@@ -1,4 +1,4 @@
-const CACHE_NAME = 'launchkey-station-v1.13'; // 版本号升为 v13
+const CACHE_NAME = 'launchkey-station-v1.14'; 
 const urlsToCache = [
   './',
   './index.html',
