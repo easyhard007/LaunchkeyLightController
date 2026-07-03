@@ -1,10 +1,10 @@
-const CACHE_NAME = 'launchkey-station-v1.8';
+const CACHE_NAME = 'launchkey-station-v1.13'; // 版本号升为 v13
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
   './icon.png',
-  // 必须把 Tonal.js 加上，断网时才能从本地调用乐理引擎！
+  './chord_detection.js', // 新增！把我们的算法文件加进缓存
   'https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js'
 ];
 
