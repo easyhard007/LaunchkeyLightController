@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Launchkey 极客工作站</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background-color: #121212; color: #fff; text-align: center; padding: 10px; margin: 0; }
+        h2 { color: #00d2ff; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 12px; margin: 15px auto; max-width: 900px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        
+        select { padding: 10px; border-radius: 8px; width: 100%; max-width: 300px; margin-bottom: 10px; }
+        button { padding: 12px 20px; font-size: 16px; font-weight: bold; background: #aa00ff; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
+        .stop-btn { background: #444; }
+        #status { margin-top: 10px; color: #aaa; font-size: 14px; }
+
+        /* --- 钢琴键盘 CSS 开始 --- */
+        #pressed-notes { font-size: 20px; font-weight: bold; color: #ff5252; margin-bottom: 15px; min-height: 24px; }
+        
+        #keyboard-wrapper { width: 100%; overflow-x: auto; padding-bottom: 10px; }
+        #keyboard { display: flex; justify-content: center; min-width: 800px; user-select: none; }
+        
+        .key { position: relative; box-sizing: border-box; }
+        
+        /* 白键 */
+        .white-key { width: 40px; height: 160px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 0 0 6px 6px; z-index: 1; }
+        /* 黑键：利用负边距挤在白键中间 */
+        .black-key { width: 26px; height: 100px; background: #222; border-radius: 0 0 4px 4px; margin-left: -13px; margin-right: -13px; z-index: 2; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
+        
+        /* 红点样式 */
+        .dot { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; background: #ff2a2a; border-radius: 50%; display: none; box-shadow: 0 0 8px #ff2a2a; }
+        .black-key .dot { bottom: 10px; } /* 黑键的红点稍微靠上一点 */
+
+        /* 按下时的激活状态 */
+        .active.white-key { background: #e0e0e0; border-bottom: 4px solid #aaa; }
+        .active.black-key { background: #111; }
+        .active .dot { display: block; } /* 激活时显示红点 */
+        /* --- 钢琴键盘 CSS 结束 --- */
+    </style>
+</head>
+<body>
+
+    <h2>Launchkey 极客工作站</h2>
+    
+    <!-- 模块 1：拾音与灯光控制 -->
+    <div class="card">
+        <h3 style="color:#d500f9; margin-top:0;">紫焰 · 拾音阵列</h3>
+        <select id="midiPorts" onchange="selectPort()">
+            <option value="">请求 MIDI 权限中...</option>
+        </select>
+        <br>
+        <button onclick="startVisualizer()">🎤 启动麦克风拾音</button>
+        <button class="stop-btn" onclick="stopVisualizer()">⏹ 停止</button>
+        <div id="status">等待操作...</div>
+    </div>
+
+    <!-- 模块 2：实时钢琴键盘监控 -->
+    <div class="card">
+        <h3 style="color:#00e676; margin-top:0;">🎹 实时弹奏监控</h3>
+        <div id="pressed-notes">当前按下: 无</div>
+        
+        <div id="keyboard-wrapper">
+            <div id="keyboard"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 全局变量 ---
+        let midiAccess = null, midiOutput = null;
+        let audioContext = null, analyser = null, microphone = null, isRunning = false;
+        let activeNotes = new Set(); // 存放当前按下的音符
+
+        const TOP_PADS = [96, 97, 98, 99, 100, 101, 102, 103];
+        const BOTTOM_PADS = [112, 113, 114, 115, 116, 117, 118, 119];
+
+        // --- 初始化网页与 MIDI ---
+        window.onload = () => {
+            initKeyboardDOM(); // 动态画出钢琴键盘
+            navigator.requestMIDIAccess({ sysex: true }).then(onMIDISuccess).catch(err => {
+                document.getElementById('status').innerText = "获取权限失败，请使用 HTTPS 环境";
+            });
+        };
+
+        function onMIDISuccess(access) {
+            midiAccess = access;
+            populateMIDIOutputs();
+            
+            // 监听所有 MIDI 输入端口的信号 (捕捉你弹奏的琴键)
+            for (let input of midiAccess.inputs.values()) {
+                input.onmidimessage = handleMIDIInput;
+            }
+            
+            // 监听设备插拔
+            midiAccess.onstatechange = (e) => {
+                populateMIDIOutputs();
+                if(e.port.type === "input") {
+                    for (let input of midiAccess.inputs.values()) input.onmidimessage = handleMIDIInput;
+                }
+            };
+        }
+
+        // --- MIDI 信号接收与解析 (核心代码 1) ---
+        function handleMIDIInput(event) {
+            const [status, note, velocity] = event.data;
+            const cmd = status >> 4; // 提取指令类型 (9代表按下, 8代表松开)
+
+            // Note On (按下琴键，且力度大于 0)
+            if (cmd === 9 && velocity > 0) {
+                activeNotes.add(note);
+                updateKeyboardUI(note, true);
+            }
+            // Note Off (松开琴键，或者力度为 0 的 Note On 都会被当做松开)
+            else if (cmd === 8 || (cmd === 9 && velocity === 0)) {
+                activeNotes.delete(note);
+                updateKeyboardUI(note, false);
+            }
+        }
+
+        // --- 钢琴 UI 渲染与更新 (核心代码 2) ---
+        // 生成从 C2 (48) 到 C5 (84) 的 37 键键盘
+        function initKeyboardDOM() {
+            const keyboardDiv = document.getElementById('keyboard');
+            const startNote = 48; // C2
+            const endNote = 84;   // C5
+            
+            for (let i = startNote; i <= endNote; i++) {
+                const keyDiv = document.createElement('div');
+                keyDiv.id = `key-${i}`;
+                
+                // 判断是黑键还是白键
+                const noteInOctave = i % 12;
+                const isBlack = [1, 3, 6, 8, 10].includes(noteInOctave);
+                keyDiv.className = isBlack ? 'key black-key' : 'key white-key';
+                
+                // 放入红点 DOM
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                keyDiv.appendChild(dot);
+                
+                keyboardDiv.appendChild(keyDiv);
+            }
+        }
+
+        // 将 MIDI 音符数字 (如 60) 转换为乐理名称 (如 C3)
+        function getNoteName(noteNumber) {
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            // Novation 手册规定: Note 60 = C3
+            const octave = Math.floor(noteNumber / 12) - 2; 
+            const name = noteNames[noteNumber % 12];
+            return `${name}${octave}`;
+        }
+
+        function updateKeyboardUI(note, isPressed) {
+            // 1. 更新琴键上的红点
+            const keyDiv = document.getElementById(`key-${note}`);
+            if (keyDiv) {
+                if (isPressed) keyDiv.classList.add('active');
+                else keyDiv.classList.remove('active');
+            }
+
+            // 2. 更新文字显示
+            const names = Array.from(activeNotes).sort((a,b)=>a-b).map(getNoteName);
+            const textDiv = document.getElementById('pressed-notes');
+            if (names.length > 0) {
+                textDiv.innerText = "当前按下: " + names.join("  ");
+            } else {
+                textDiv.innerText = "当前按下: 无";
+            }
+        }
+
+        // --- 下面是之前的 端口与拾音灯光 控制代码 ---
+        function populateMIDIOutputs() {
+            const select = document.getElementById('midiPorts');
+            select.innerHTML = '<option value="">-- 请选择 DAW / Port 2 (控灯专用) --</option>';
+            for (let output of midiAccess.outputs.values()) {
+                let option = document.createElement('option');
+                option.value = output.id;
+                option.text = output.name;
+                select.appendChild(option);
+            }
+        }
+
+        function selectPort() {
+            midiOutput = midiAccess.outputs.get(document.getElementById('midiPorts').value);
+            if(midiOutput) midiOutput.send([0x9F, 0x0C, 0x7F]);
+        }
+
+        function getPurpleBrightness(volume) {
+            const noiseFloor = 25; 
+            if (volume < noiseFloor) return { r: 0, g: 0, b: 0 };
+            let brightness = Math.floor(volume / 2); 
+            return { r: brightness, g: 0, b: brightness }; // 纯紫色
+        }
+
+        async function startVisualizer() {
+            if (!midiOutput) return alert("请先选择 MIDI 端口！");
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                analyser.fftSize = 64; 
+                microphone.connect(analyser);
+
+                isRunning = true;
+                document.getElementById('status').innerText = "拾音灯光阵列运行中...";
+                updateLights();
+            } catch (err) { alert("无法访问麦克风：" + err); }
+        }
+
+        function stopVisualizer() {
+            isRunning = false;
+            if(audioContext) audioContext.close();
+            if(midiOutput) {
+                [...TOP_PADS, ...BOTTOM_PADS].forEach(pad => midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, pad, 0, 0, 0, 0xF7]));
+                setTimeout(() => midiOutput.send([0x9F, 0x0C, 0x00]), 100);
+            }
+            document.getElementById('status').innerText = "已停止";
+        }
+
+        function updateLights() {
+            if (!isRunning) return;
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            for (let i = 0; i < 8; i++) {
+                let c1 = getPurpleBrightness(dataArray[i]);
+                midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, BOTTOM_PADS[i], c1.r, c1.g, c1.b, 0xF7]);
+            }
+            for (let i = 0; i < 8; i++) {
+                let c2 = getPurpleBrightness(dataArray[i + 8]);
+                midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, TOP_PADS[i], c2.r, c2.g, c2.b, 0xF7]);
+            }
+            setTimeout(updateLights, 50); 
+        }
+    </script>
+</body>
+</html>
