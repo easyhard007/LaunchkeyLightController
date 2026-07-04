@@ -1,0 +1,71 @@
+:root { 
+    --wk-width: 40px; 
+    --bk-width: 26px; 
+    --bk-margin: -13px; 
+    --pad-gap: 5px; 
+}
+
+html, body { 
+    background-color: #121212; margin: 0; padding: 0; min-height: 100dvh; color: #fff; text-align: center; overflow: hidden; 
+}
+body { 
+    padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); 
+    padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); box-sizing: border-box; display: flex; flex-direction: column; 
+}
+h2 { color: #00d2ff; margin-top: 10px; margin-bottom: 5px;}
+.card { background: #1e1e1e; padding: 15px; border-radius: 12px; margin: 10px auto; max-width: 900px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); width: 90%; }
+
+/* === 物理虚拟 Pad 矩阵 === */
+#pad-matrix { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(2, 1fr); gap: var(--pad-gap); margin-bottom: 20px; }
+.v-pad { background-color: #636363; aspect-ratio: 1 / 1; border-radius: calc(var(--pad-gap) * 0.2); box-shadow: inset 0 0 8px #4a4a4a; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+.v-pad-light { position: absolute; top: 0; left: 0; width: 100%; height: 100%; mix-blend-mode: screen; mix-blend-mode: plus-lighter; pointer-events: none; z-index: 1; box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6); }
+
+/* === 钢琴监控 UI === */
+#pressed-notes { background: #2a2a2a; border-radius: 8px; margin-bottom: 15px; height: 86px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
+#keyboard-wrapper { width: 100%; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+#keyboard-wrapper::-webkit-scrollbar { display: none; } 
+#keyboard { display: flex; width: max-content; user-select: none; }
+
+.key { position: relative; box-sizing: border-box; }
+.white-key { width: var(--wk-width); min-width: var(--wk-width); height: 140px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 0 0 6px 6px; z-index: 1; }
+.black-key { width: var(--bk-width); min-width: var(--bk-width); height: 85px; background: #222; border-radius: 0 0 4px 4px; margin-left: var(--bk-margin); margin-right: var(--bk-margin); z-index: 2; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
+
+/* 物理按下状态 (键面下沉变色) */
+.active-red.white-key { background: #e0e0e0; border-bottom: 4px solid #aaa; }
+.active-red.black-key { background: #111; }
+
+/* 监控点样式：红点(物理按压) & 粉点(踏板延音) */
+.dot { position: absolute; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 50%; display: none; bottom: 15px; z-index: 4; }
+.black-key .dot { bottom: 8px; }
+
+.active-red .dot { display: block; background: #ff2a2a; box-shadow: 0 0 8px #ff2a2a; }
+.key:not(.active-red).active-pink .dot { display: block; background: #ff80ab; box-shadow: 0 0 8px #ff80ab; }
+
+/* === 全局灯光控制面板 (60/40 布局) === */
+#light-panel-wrapper { display: flex; width: 100%; align-items: stretch; margin-top: 10px; }
+#color-picker-section { width: 60%; display: flex; justify-content: center; align-items: center; border-right: 1px solid #333; }
+#color-picker-container { display: flex; gap: 15px; }
+
+/* 右侧和弦调性面板 (纯白字体) */
+#light-info-section { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 10px; box-sizing: border-box; }
+#light-chord-display { font-size: 42px; font-weight: bold; color: #fff; margin-bottom: 5px; font-family: serif; }
+#light-key-display { font-size: 16px; color: #fff; font-weight: bold; }
+
+/* === FAB 与 设置页 === */
+#fab-btn { position: fixed; bottom: max(30px, env(safe-area-inset-bottom)); left: max(30px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: none; color: #fff; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 900; }
+#fab-btn.success { color: #00e676; }
+#settings-page { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background-color: #121212; z-index: 1000; display: none; flex-direction: column; align-items: center; padding-top: max(60px, env(safe-area-inset-top)); box-sizing: border-box; }
+#settings-page.show { display: flex; }
+#back-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left)); background: transparent; color: #aaa; font-size: 16px; padding: 10px 15px; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
+select { padding: 12px; border-radius: 8px; width: 100%; max-width: 320px; margin-bottom: 20px; background: #333; color: white; border: 1px solid #555; font-size: 16px; }
+.action-btn { padding: 15px 20px; font-size: 16px; font-weight: bold; background: #aa00ff; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 10px 5px; width: 140px; }
+.stop-btn { background: #444; }
+#status { margin-top: 15px; color: #aaa; font-size: 14px; }
+
+/* 调试表格 CSS */
+#debug-panel { margin: 20px auto; max-width: 900px; width: 90%; background: #1e1e1e; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); text-align: left;}
+#debug-panel h3 { color: #ffeb3b; margin-top: 0; font-size: 16px; }
+table { width: 100%; border-collapse: collapse; color: #fff; font-size: 14px; }
+th, td { padding: 8px 12px; border-bottom: 1px solid #333; text-align: center; }
+th { color: #00d2ff; }
+tr.top-score { background-color: rgba(0, 230, 118, 0.15); font-weight: bold; }

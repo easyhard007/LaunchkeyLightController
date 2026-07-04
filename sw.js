@@ -1,11 +1,14 @@
-const CACHE_NAME = 'launchkey-station-v0.3.7';
+const CACHE_NAME = 'launchkey-station-v0.44';
 const urlsToCache = [
   './',
   './index.html',
+  './style.css',          
+  './keyboard.js',        
+  './chord_detection.js',
+  './light_control.js',
+  './scale_chord_engine.js',
   './manifest.json',
   './icon.png',
-  './chord_detection.js',
-  './light_control.js', // 新增这一行！！！
   'https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js',
   'https://cdn.jsdelivr.net/npm/@jaames/iro@5'
 ];

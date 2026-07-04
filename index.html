@@ -13,77 +13,18 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- 1. 引入第三方库 -->
+    <!-- 1. 引入 CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- 2. 引入第三方库 -->
     <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
     
-    <!-- 2. 引入解耦后的模块 -->
+    <!-- 3. 引入业务解耦模块 -->
     <script src="chord_detection.js"></script>
+	<script src="scale_chord_engine.js"></script> 
     <script src="light_control.js"></script>
-
-    <style>
-        :root { --wk-width: 40px; --bk-width: 26px; --bk-margin: -13px; --pad-gap: 5px; }
-        
-        html, body { background-color: #121212; margin: 0; padding: 0; min-height: 100dvh; color: #fff; text-align: center; overflow: hidden; }
-        body { padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); box-sizing: border-box; display: flex; flex-direction: column; }
-        h2 { color: #00d2ff; margin-top: 10px; margin-bottom: 5px;}
-        .card { background: #1e1e1e; padding: 15px; border-radius: 12px; margin: 10px auto; max-width: 900px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); width: 90%; }
-        
-        /* 物理虚拟 Pad 矩阵 */
-        #pad-matrix {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-            gap: var(--pad-gap); 
-            margin-bottom: 20px; 
-        }
-        .v-pad {
-            background-color: #636363; 
-            aspect-ratio: 1 / 1;       
-            border-radius: calc(var(--pad-gap) * 0.2); 
-            box-shadow: inset 0 0 8px #4a4a4a; /* 深灰色内阴影 */
-            position: relative;
-            overflow: hidden;
-            display: flex; justify-content: center; align-items: center;
-        }
-		.v-pad-light {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            mix-blend-mode: screen; 
-            mix-blend-mode: plus-lighter; 
-            pointer-events: none;
-            z-index: 1;
-            /* 核心修复：在光晕图层最上方加上黑色内阴影，强制压暗边缘的光晕 */
-            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
-        }
-
-        /* 钢琴与和弦 UI */
-        #pressed-notes { background: #2a2a2a; border-radius: 8px; margin-bottom: 15px; height: 86px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
-        #keyboard-wrapper { width: 100%; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
-        #keyboard-wrapper::-webkit-scrollbar { display: none; } 
-        #keyboard { display: flex; width: max-content; user-select: none; }
-        .key { position: relative; box-sizing: border-box; }
-        .white-key { width: var(--wk-width); min-width: var(--wk-width); height: 140px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 0 0 6px 6px; z-index: 1; }
-        .black-key { width: var(--bk-width); min-width: var(--bk-width); height: 85px; background: #222; border-radius: 0 0 4px 4px; margin-left: var(--bk-margin); margin-right: var(--bk-margin); z-index: 2; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
-        .dot { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; background: #ff2a2a; border-radius: 50%; display: none; }
-        .black-key .dot { bottom: 8px; }
-        .active.white-key { background: #e0e0e0; border-bottom: 4px solid #aaa; }
-        .active.black-key { background: #111; }
-        .active .dot { display: block; }
-
-        /* 调色盘与组件 */
-        #color-picker-container { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 10px; }
-
-        #fab-btn { position: fixed; bottom: max(30px, env(safe-area-inset-bottom)); left: max(30px, env(safe-area-inset-left)); width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: none; color: #fff; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 900; }
-        #fab-btn.success { color: #00e676; }
-
-        #settings-page { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background-color: #121212; z-index: 1000; display: none; flex-direction: column; align-items: center; padding-top: max(60px, env(safe-area-inset-top)); box-sizing: border-box; }
-        #settings-page.show { display: flex; }
-        #back-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left)); background: transparent; color: #aaa; font-size: 16px; padding: 10px 15px; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
-        select { padding: 12px; border-radius: 8px; width: 100%; max-width: 320px; margin-bottom: 20px; background: #333; color: white; border: 1px solid #555; font-size: 16px; }
-        .action-btn { padding: 15px 20px; font-size: 16px; font-weight: bold; background: #aa00ff; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 10px 5px; width: 140px; }
-        .stop-btn { background: #444; }
-        #status { margin-top: 15px; color: #aaa; font-size: 14px; }
-    </style>
+    <script src="keyboard.js"></script>
 </head>
 <body>
 
@@ -91,15 +32,15 @@
         <h2>Launchkey Mini 37 灯光工作站</h2>
         
         <div class="card" id="piano-card">
-            <!-- 模块1：虚拟 Pad 矩阵 -->
+            <!-- Pad 矩阵 -->
             <div id="pad-matrix"></div>
 
-            <!-- 模块2：和弦监控 -->
+            <!-- 和弦监控区 -->
             <div id="pressed-notes">
                 <div style="height:100%; display:flex; justify-content:center; align-items:center; color:#666; font-size:16px;">等待弹奏...</div>
             </div>
             
-            <!-- 模块3：钢琴键盘 -->
+            <!-- 钢琴键盘 -->
             <div id="keyboard-wrapper">
                 <div id="keyboard"></div>
             </div>
@@ -107,9 +48,51 @@
 
         <div class="card" id="color-card">
             <h3 style="color:#d500f9; margin-top:0;">🎨 全局灯光控制</h3>
-            <div id="color-picker-container"></div>
+            <div id="light-panel-wrapper">
+                <!-- 左侧调色盘 -->
+                <div id="color-picker-section">
+                    <div id="color-picker-container"></div>
+                </div>
+                <!-- 右侧和弦与调性显示 -->
+                <div id="light-info-section">
+                    <div id="light-chord-display">-</div>
+                    <div id="light-key-display">正在识别调性</div>
+                </div>
+            </div>
         </div>
-
+		<div class="card" id="debug-panel">
+            <h3>🛠️ 算法 Debug 面板 (Tonal.js Filter)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tonal 原始和弦</th>
+                        <th>置信度</th>
+                        <th>长度</th>
+                        <th>得分</th>
+                        <th>降维归类</th>
+                    </tr>
+                </thead>
+                <tbody id="debug-tbody">
+                    <tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>
+                </tbody>
+            </table>
+        </div>
+		<!-- 新增：调性追踪数据调试面板 -->
+        <div class="card" id="debug-panel">
+            <h3>📊 调性追踪向量表 (Chroma Vector)</h3>
+            <!-- 横向排列 12 个音名的实时权重 -->
+            <div id="pitch-weights-row" style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:15px; background:#111; padding:10px; border-radius:8px;">
+                <!-- JS 动态生成 -->
+            </div>
+            <table>
+                <thead>
+                    <tr><th>排名</th><th>分析调性</th><th>置信度得分</th></tr>
+                </thead>
+                <tbody id="scale-debug-tbody">
+                    <tr><td colspan="3" style="color:#666;">等待弹奏...</td></tr>
+                </tbody>
+            </table>
+        </div>
         <div id="fab-btn" onclick="openSettings()">?</div>
     </div>
 
@@ -131,122 +114,62 @@
 
     <script>
         // ================= 全局状态与常量 =================
-        // 这些全局变量会被 light_control.js 读取
-        window.midiAccess = null;
-        window.midiOutput = null;
+        window.midiAccess = null; 
+        window.midiOutput = null; 
         window.isRunning = false;
 
-        let activeNotes = new Set(); 
-        const NOTE_START = 24; const NOTE_END = 96; const VISIBLE_WHITE_KEYS = 21; 
+        window.isPedalDown = false;          
+        window.activeNotes = new Set();      
+        window.pedalHeldNotes = new Set();   
+        window.allActiveNotes = new Set();   
 
-        // ================= UI 初始化与布局计算 =================
-        function initPadMatrixDOM() {
-            const matrix = document.getElementById('pad-matrix');
-            matrix.innerHTML = '';
-            for(let i = 0; i < 16; i++) {
-                const pad = document.createElement('div'); pad.className = 'v-pad';
-                const light = document.createElement('div'); light.className = 'v-pad-light'; light.id = `vpad-light-${i}`; 
-                pad.appendChild(light); matrix.appendChild(pad);
-            }
+        function updateCombinedNotes() {
+            window.allActiveNotes = new Set([...window.activeNotes, ...window.pedalHeldNotes]);
         }
 
-        // 精准计算 CSS 变量
-        function calculateAndInjectDimensions() {
-            const wrapper = document.getElementById('keyboard-wrapper');
-            const wkWidth = wrapper.clientWidth / VISIBLE_WHITE_KEYS;
-            document.documentElement.style.setProperty('--wk-width', `${wkWidth}px`);
-            document.documentElement.style.setProperty('--bk-width', `${wkWidth * 0.65}px`);
-            document.documentElement.style.setProperty('--bk-margin', `-${wkWidth * 0.325}px`);
+        // ================= MIDI 核心监听逻辑 =================
+        function handleMIDIInput(event) {
+            const [status, data1, data2] = event.data; 
+            const cmd = status >> 4; 
+            const channel = status & 0x0F;
+            if (channel === 15) return; 
 
-            const matrix = document.getElementById('pad-matrix');
-            if(matrix && matrix.clientWidth) {
-                const padGap = matrix.clientWidth / 71;
-                document.documentElement.style.setProperty('--pad-gap', `${padGap}px`);
-            }
-        }
-
-        function getWhiteKeyIndex(note) {
-            const offsets = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; 
-            return Math.floor((note - 24) / 12) * 7 + offsets[(note - 24) % 12];
-        }
-
-        function initKeyboardDOM() {
-            const keyboardDiv = document.getElementById('keyboard');
-            keyboardDiv.innerHTML = '';
-            
-            calculateAndInjectDimensions();
-
-            for (let i = NOTE_START; i <= NOTE_END; i++) { 
-                const keyDiv = document.createElement('div'); keyDiv.id = `key-${i}`;
-                keyDiv.className = [1, 3, 6, 8, 10].includes(i % 12) ? 'key black-key' : 'key white-key';
-                const dot = document.createElement('div'); dot.className = 'dot';
-                keyDiv.appendChild(dot); keyboardDiv.appendChild(keyDiv);
-            }
-            const wrapper = document.getElementById('keyboard-wrapper');
-            const wkWidth = parseFloat(document.documentElement.style.getPropertyValue('--wk-width'));
-            setTimeout(() => wrapper.scrollLeft = getWhiteKeyIndex(48) * wkWidth, 50);
-        }
-
-        window.addEventListener('resize', calculateAndInjectDimensions);
-
-        // 钢琴智能滚动
-        function handleAutoScroll() {
-            if (activeNotes.size === 0) return;
-            const notes = Array.from(activeNotes).sort((a,b) => a - b);
-            const wrapper = document.getElementById('keyboard-wrapper');
-            const wkWidth = parseFloat(document.documentElement.style.getPropertyValue('--wk-width'));
-            if (!wkWidth) return;
-            
-            const minVisibleWk = wrapper.scrollLeft / wkWidth;
-            const maxVisibleWk = minVisibleWk + VISIBLE_WHITE_KEYS - 1; 
-            const lowestWk = getWhiteKeyIndex(notes[0]);
-            const highestWk = getWhiteKeyIndex(notes[notes.length - 1]);
-
-            if (lowestWk < minVisibleWk) wrapper.scrollTo({ left: lowestWk * wkWidth, behavior: 'smooth' });
-            else if (highestWk > maxVisibleWk) {
-                let targetScroll = (highestWk - VISIBLE_WHITE_KEYS + 1) * wkWidth;
-                if ((targetScroll / wkWidth) > lowestWk) targetScroll = lowestWk * wkWidth; 
-                wrapper.scrollTo({ left: targetScroll, behavior: 'smooth' });
-            }
-        }
-
-        // ================= 核心：和弦展示 60/40 =================
-        function updateKeyboardUI(note, isPressed) {
-            const keyDiv = document.getElementById(`key-${note}`);
-            if (keyDiv) {
-                if (isPressed) keyDiv.classList.add('active');
-                else keyDiv.classList.remove('active');
-            }
-            if (isPressed) handleAutoScroll(); 
-
-            const textDiv = document.getElementById('pressed-notes');
-            const notesArr = Array.from(activeNotes).sort((a,b) => a - b);
-            
-            if (notesArr.length === 0) {
-                textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;">等待弹奏...</div>`;
-                return;
-            }
-
-            // 调用外部文件 chord_detection.js 的侦测函数
-            if (typeof detectChordSmart === 'function') {
-                const scoredChords = detectChordSmart(notesArr);
-                const primary = scoredChords[0].name;
-                let secondaryHtml = "";
-                if (scoredChords.length > 1) {
-                    secondaryHtml = `<span style="font-size: 12px; color: rgba(255,255,255,0.3); margin-right: 8px; font-weight: normal;">OR</span><span style="font-size: 18px; color: #ccc; font-weight: bold;">${scoredChords[1].name}</span>`;
+            // CC64 延音踏板
+            if (cmd === 11 && data1 === 64) {
+                window.isPedalDown = data2 >= 64;
+                if (!window.isPedalDown) {
+                    window.pedalHeldNotes.clear();
+                    updateCombinedNotes();
+                    if (typeof refreshKeyboardUI === 'function') refreshKeyboardUI();
                 }
-                textDiv.innerHTML = `
-                    <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
-                        <span style="font-size: 32px; font-weight: bold; color: #fff;">${primary}</span>
-                    </div>
-                    <div style="height: 40%; display: flex; align-items: baseline; justify-content: center; padding-top: 2px;">
-                        ${secondaryHtml}
-                    </div>
-                `;
+                return; 
+            }
+
+            // Note On (物理按下)
+            if (cmd === 9 && data2 > 0) { 
+                window.activeNotes.add(data1); 
+                if (window.isPedalDown) window.pedalHeldNotes.add(data1); 
+                else window.pedalHeldNotes.delete(data1); 
+				
+				// === 新增：将按下的音符投喂给调性引擎 ===
+                if (typeof registerNoteForScale === 'function') registerNoteForScale(data1);
+                
+                updateCombinedNotes();
+                if (typeof refreshKeyboardUI === 'function') refreshKeyboardUI();
+                
+                if (window.isRunning && typeof triggerPadLights === 'function') triggerPadLights(); 
+            } 
+            // Note Off (物理松开)
+            else if (cmd === 8 || (cmd === 9 && data2 === 0)) { 
+                window.activeNotes.delete(data1); 
+                if (window.isPedalDown) window.pedalHeldNotes.add(data1);
+                
+                updateCombinedNotes();
+                if (typeof refreshKeyboardUI === 'function') refreshKeyboardUI();
             }
         }
 
-        // ================= 悬浮框与设置控制 =================
+        // ================= 设置与连接 =================
         function openSettings() { document.getElementById('settings-page').classList.add('show'); }
         function closeSettings() { document.getElementById('settings-page').classList.remove('show'); }
         function updateFabState() {
@@ -255,14 +178,12 @@
             else { fab.innerText = "?"; fab.classList.remove('success'); }
         }
 
-        // ================= MIDI 初始化 =================
         window.onload = () => {
-            initPadMatrixDOM(); 
-            initKeyboardDOM(); 
-            
-            // 调用外部文件 light_control.js 的取色器初始化函数
+            // 初始化其他文件的组件
+            if (typeof initPadMatrixDOM === 'function') initPadMatrixDOM(); 
+            if (typeof initKeyboardDOM === 'function') initKeyboardDOM(); 
             if (typeof initColorPicker === 'function') initColorPicker();
-
+            
             navigator.requestMIDIAccess({ sysex: true }).then(onMIDISuccess).catch(err => {
                 document.getElementById('status').innerText = "获取权限失败，请使用 HTTPS 环境";
             });
@@ -285,60 +206,21 @@
             select.innerHTML = '<option value="">-- 请选择 DAW / Port 2 --</option>';
             for (let output of window.midiAccess.outputs.values()) {
                 let option = document.createElement('option'); option.value = output.id; option.text = output.name; 
-                if (output.id === currentSelectedId) option.selected = true; 
-                select.appendChild(option);
+                if (output.id === currentSelectedId) option.selected = true; select.appendChild(option);
             }
         }
 
-        function selectPort() {
-            window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value);
-        }
-
-        function handleMIDIInput(event) {
-            const [status, note, velocity] = event.data; 
-            const cmd = status >> 4; 
-            const channel = status & 0x0F;
-            if (channel === 15) return; // 过滤通道16控制信号
-
-            // Note On (按下琴键)
-            if (cmd === 9 && velocity > 0) { 
-                activeNotes.add(note); 
-                updateKeyboardUI(note, true); 
-                
-                // === 核心接入：调用灯光触发函数 ===
-                // 如果处于接管状态，触发 16 个 Pad 的灯光包络
-                if (window.isRunning && typeof triggerPadLights === 'function') {
-                    triggerPadLights();
-                }
-
-            } 
-            // Note Off (松开琴键) - 现阶段不阻断衰减，只更新UI
-            else if (cmd === 8 || (cmd === 9 && velocity === 0)) { 
-                activeNotes.delete(note); 
-                updateKeyboardUI(note, false); 
-            }
-        }
-
+        function selectPort() { window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value); }
+        
         function startControl() {
             if (!window.midiOutput) return alert("请先在上方选择 MIDI 端口！");
-            
-            window.midiOutput.send([0x9F, 0x0C, 0x7F]); 
-            window.isRunning = true;
-            updateFabState();
-            
-            document.getElementById('status').innerText = "已接管键盘灯光控制权"; 
-            document.getElementById('status').style.color = "#00e676";
-            
-            // 调用外部文件 light_control.js 的强制发送函数
+            window.midiOutput.send([0x9F, 0x0C, 0x7F]); window.isRunning = true; updateFabState();
             if (typeof forceSendCurrentColorToMidi === 'function') forceSendCurrentColorToMidi();
         }
-
+        
         function stopControl() {
-            window.isRunning = false;
-            updateFabState();
+            window.isRunning = false; updateFabState();
             if(window.midiOutput) window.midiOutput.send([0x9F, 0x0C, 0x00]);
-            document.getElementById('status').innerText = "已退回普通模式"; 
-            document.getElementById('status').style.color = "#aaa";
         }
     </script>
 </body>
