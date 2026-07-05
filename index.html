@@ -25,6 +25,7 @@
 	<script src="scale_chord_engine.js"></script> 
 	<script src="modulation_engine.js"></script>
 	<script src="color_mapping.js"></script>
+	<script src="audio_engine.js"></script>
     <script src="light_control.js"></script>
     <script src="keyboard.js"></script>
 </head>
@@ -215,16 +216,24 @@
 
         function selectPort() { window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value); }
         
-        function startControl() {
-            if (!window.midiOutput) return alert("请先在上方选择 MIDI 端口！");
-            window.midiOutput.send([0x9F, 0x0C, 0x7F]); window.isRunning = true; updateFabState();
-            if (typeof forceSendCurrentColorToMidi === 'function') forceSendCurrentColorToMidi();
-        }
-        
-        function stopControl() {
-            window.isRunning = false; updateFabState();
-            if(window.midiOutput) window.midiOutput.send([0x9F, 0x0C, 0x00]);
-        }
+		function startControl() {
+			if (!window.midiOutput) return alert("请先在上方选择 MIDI 端口！");
+			window.midiOutput.send([0x9F, 0x0C, 0x7F]); 
+			window.isRunning = true; 
+			updateFabState();
+			
+			// 【新增】：启动麦克风引擎
+			if (typeof startAudioEngine === 'function') startAudioEngine();
+		}
+
+		function stopControl() {
+			window.isRunning = false; 
+			updateFabState();
+			if(window.midiOutput) window.midiOutput.send([0x9F, 0x0C, 0x00]);
+			
+			// 【新增】：关闭麦克风引擎
+			if (typeof stopAudioEngine === 'function') stopAudioEngine();
+		}
     </script>
 </body>
 </html>

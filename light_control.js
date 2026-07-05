@@ -148,29 +148,50 @@ function engineLoop(currentTime) {
 
     // 1. 光源包络衰减 (Pad 0)
     let sourcePad = window.padLightSources[0];
+ // --------- 【旧模式：MIDI 包络衰减】 (先注释掉保留备用) ---------
+    /*
     if (sourcePad.envelope > 0) {
         let decrement = deltaTime / FADE_DURATION;
         sourcePad.envelope -= decrement;
         if (sourcePad.envelope <= 0) sourcePad.envelope = 0;
     }
+    */
+    
+    // +++++++++ 【新模式：麦克风实时驱动】 +++++++++
+    // 直接用麦克风的实时音量强制接管光能包络！
+    if (typeof window.currentAudioVolume !== 'undefined') {
+        sourcePad.envelope = window.currentAudioVolume;
+    }
+    // ++++++++++++++++++++++++++++++++++++++++++++
 
-	// 【核心修复 1】：将最大亮度 L 限制为 60，避免死白
+	//将最大亮度 L 限制为 60，避免死白
     const MAX_LIGHTNESS = 60;
+	const MIN_ENVELOPE_FLOOR = 0.2; // 30% 的下限，永远不会跌破这个值
+   
+    // 我们拿到麦克风传来的物理包络 (0.0 ~ 1.0)
+    let rawEnvelope = sourcePad.envelope;
     
-    // 【核心修复 2】：使用抛物线曲线计算视觉 Envelope (0~1)
-    let visualEnvelope = applyBrightnessCurve(sourcePad.envelope * 100, 100) / 100;
+    // 如果开启了控制模式 (isRunning)，强制进行兜底保护
+    if (window.isRunning) {
+        rawEnvelope = Math.max(MIN_ENVELOPE_FLOOR, rawEnvelope);
+    }
+
+    // 通过抛物线函数进行视觉修正
+    let visualEnvelope = applyBrightnessCurve(rawEnvelope * 100, 100) / 100;
     
-    // 亮度衰减：从 MAX_LIGHTNESS (60) 降到 IDLE_LIGHTNESS (0)
-    let currentL = IDLE_LIGHTNESS + (MAX_LIGHTNESS - IDLE_LIGHTNESS) * visualEnvelope;
-    
-    // 饱和度衰减：从目标饱和度 (通常是100) 逐渐降到 0
+    // 计算最终的亮度 (L) 和饱和度 (S)
+    let currentL = MAX_LIGHTNESS * visualEnvelope;
     let currentS = sourcePad.userHSL.s * visualEnvelope;
     
-    globalPadColors[0] = { 
-        h: sourcePad.userHSL.h, 
-        s: currentS, 
-        l: currentL 
-    };
+    globalPadColors[0] = { h: sourcePad.userHSL.h, s: currentS, l: currentL };
+
+    // 因为有了 30% 的氛围底光，意味着只要接管了设备，灯光系统就必须永远运转
+    // 我们永远保持 active 状态，强制执行推流和渲染，彻底废除 forceZeroFlush 关灯机制！
+    if (window.isRunning) {
+        isAnyPadActive = true; 
+    } else {
+        forceZeroFlush = true; // 只有在用户点击“停止”按钮时，才真正触发黑屏全关
+    }
 
     // 2. 动效模块 (按 30Hz 推波)
     if (currentTime - lastEngineTick >= ANIMATION_TICK) {
