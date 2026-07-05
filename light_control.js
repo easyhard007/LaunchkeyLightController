@@ -1,25 +1,30 @@
 // ==========================================
-// 光学与物理灯光引擎 (Light & Color Engine)
-// 当前模式: 上排8个Pad + 10ms隔行扫描(每次发4个) + 抛物线视觉修正
+// 光学与物理灯光引擎 (Light & Color Engine v5.2)
+// 修复：恢复 iro.js 调色盘，修正颜色传入断点
 // ==========================================
 
 const TOP_PADS = [96, 97, 98, 99, 100, 101, 102, 103]; 
-// (下排暂不控制，但保留常数定义以备未来扩充)
 const BOTTOM_PADS = [112, 113, 114, 115, 116, 117, 118, 119];
 
-// === 核心设定 ===
-const FADE_DURATION = 500;       // 衰减时间：500 毫秒
-const MIDI_UPDATE_INTERVAL = 10; // 极限刷新间隔：10ms
+const FADE_DURATION = 500;       
+const ANIMATION_TICK = 33;       // 约 30Hz 动效帧率
+const IDLE_LIGHTNESS = 0; 
 
-// 全局状态库 (目前只用上排 8 个)
-let globalPadColors = Array.from({length: 8}, () => ({
-    baseHSL: { h: 0, s: 0, l: 0 },
-    currentL: 0 
+// globalPadColors: 用于 UI 和 MIDI 发送的绝对显示颜色
+let globalPadColors = Array.from({length: 16}, () => ({ h: 0, s: 0, l: 0 }));
+
+// padLightSources: 独立光源池 (当前只用 padLightSources[0] 作为发起源)
+// 【核心变量暴露】：必须把 padLightSources 挂载到 window，让 color_mapping.js 能写入颜色！
+window.padLightSources = Array.from({length: 16}, () => ({
+    userHSL: { h: 0, s: 0, l: 0 },
+    envelope: 0 
 }));
 
+let lastEngineTick = 0; 
 let colorPicker = null;
 
-// === 工具函数区 ===
+// === Driver 层：脏数据缓存 ===
+let lastSentColors = Array.from({length: 16}, () => ({ r: -1, g: -1, b: -1 }));
 
 function hslToRgb(h, s, l) {
     h /= 360; s /= 100; l /= 100;
@@ -40,162 +45,158 @@ function hslToRgb(h, s, l) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-// 亮度视觉修正曲线 (上凸抛物线: y = 1 - x^2)
+function flushMidiDriver() {
+    if (!window.isRunning || !window.midiOutput) return;
+
+    for (let i = 0; i < 8; i++) { 
+        let color = globalPadColors[i];
+        let [r8, g8, b8] = hslToRgb(color.h, color.s, color.l);
+        
+        let r7 = Math.floor(r8 / 2);
+        let g7 = Math.floor(g8 / 2);
+        let b7 = Math.floor(b8 / 2);
+
+        // 脏数据拦截
+        if (r7 !== lastSentColors[i].r || g7 !== lastSentColors[i].g || b7 !== lastSentColors[i].b) {
+            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, TOP_PADS[i], r7, g7, b7, 0xF7]);
+            lastSentColors[i] = { r: r7, g: g7, b: b7 };
+        }
+    }
+}
+
+// 笛卡尔坐标系 HSL 插值
+function interpolateHSL(source, target, progress) {
+    progress = Math.max(0, Math.min(1, progress));
+    let h1 = source.h, s1 = source.s;
+    let h2 = target.h, s2 = target.s;
+    
+    if (s1 < 1) h1 = h2;
+    if (s2 < 1) h2 = h1;
+
+    const h1Rad = h1 * (Math.PI / 180);
+    const h2Rad = h2 * (Math.PI / 180);
+    
+    const x1 = s1 * Math.cos(h1Rad);
+    const y1 = s1 * Math.sin(h1Rad);
+    const x2 = s2 * Math.cos(h2Rad);
+    const y2 = s2 * Math.sin(h2Rad);
+    
+    const currentX = x1 + (x2 - x1) * progress;
+    const currentY = y1 + (y2 - y1) * progress;
+    
+    let currentS = Math.sqrt(currentX * currentX + currentY * currentY);
+    let currentH = Math.atan2(currentY, currentX) * (180 / Math.PI);
+    if (currentH < 0) currentH += 360;
+    
+    let currentL = source.l + (target.l - source.l) * progress;
+    
+    return { h: currentH, s: currentS, l: currentL };
+}
+
 function applyBrightnessCurve(linearL, baseL) {
     if (baseL <= 0 || linearL <= 0) return 0;
     let x = 1.0 - (linearL / baseL);
     let multiplier = 1.0 - (x * x);
-    multiplier = Math.max(0, Math.min(1, multiplier));
-    return baseL * multiplier;
+    return baseL * Math.max(0, Math.min(1, multiplier));
 }
 
-// === 初始化系统 ===
+// === 动效模块 (Wave Animator) ===
+function applyWaveEffect() {
+    for (let i = 7; i >= 1; i--) {
+        let prevPad = globalPadColors[i - 1];
+        let currentPad = globalPadColors[i];
+        // 0.4 保留自身惯性，0.6 接收前方的光波
+        globalPadColors[i] = interpolateHSL(currentPad, prevPad, 0.6);
+    }
+}
+
+// === 光源模块触发 ===
+function triggerPadLights() {
+    window.padLightSources[0].envelope = 1.0; 
+}
+
+function forceSendCurrentColorToMidi() {
+    triggerPadLights();
+}
+
+// === 【核心修复】：恢复调色盘渲染 ===
 function initColorPicker() {
     colorPicker = new iro.ColorPicker("#color-picker-container", {
         width: 180, 
-        color: "#aa00ff", 
-        layoutDirection: "horizontal", 
-        layout: [
-            { component: iro.ui.Wheel }, 
-            { component: iro.ui.Slider, options: { sliderType: 'value', layoutDirection: 'vertical' } }
-        ]
+        color: "#aa00ff", // 初始占位颜色
+        layout: [ { component: iro.ui.Wheel } ]
     });
 
-    colorPicker.on('color:change', function(color) {
-        const hsl = color.hsl; 
-        for(let i = 0; i < 8; i++) {
-            globalPadColors[i].baseHSL = { h: hsl.h, s: hsl.s, l: hsl.l };
-        }
-    });
-
+    // 绘制 TSD 外层 SVG
+    setTimeout(() => {
+        if (typeof initTSDOverlay === 'function') initTSDOverlay();
+    }, 100);
+    
+    // 初始化颜色数组
     const hsl = colorPicker.color.hsl;
-    for(let i = 0; i < 8; i++) {
-        globalPadColors[i].baseHSL = { h: hsl.h, s: hsl.s, l: hsl.l };
-        globalPadColors[i].currentL = 0; 
-        renderDOMColor(i, { h: hsl.h, s: hsl.s, l: 0 }); 
-    }
+    window.padLightSources[0].userHSL = { h: hsl.h, s: hsl.s, l: 100 };
     
     requestAnimationFrame(engineLoop);
 }
 
-// === 外部触发：按下琴键 ===
-function triggerPadLights() {
-    for(let i = 0; i < 8; i++) {
-        globalPadColors[i].currentL = globalPadColors[i].baseHSL.l; 
-    }
-    // 起音瞬间，全量发射 8 个灯，保证视觉无延迟爆发
-    flushMidiBufferAll();
-}
-
-function forceSendCurrentColorToMidi() {
-    if (colorPicker) triggerPadLights();
-}
-
-// === 渲染网页 UI ===
-function renderDOMColor(index, hsl) {
-    const lightDiv = document.getElementById(`vpad-light-${index}`);
-    if(lightDiv) {
-        let h = hsl.h, s = hsl.s, l = hsl.l;
-        const stops = [
-            `hsla(${h},${s}%,${l}%, 1) 0%`,
-            `hsla(${h},${s}%,${l}%, 0.96) 10%`,
-            `hsla(${h},${s}%,${l}%, 0.84) 30%`,
-            `hsla(${h},${s}%,${l}%, 0.64) 68%`,
-            `hsla(${h},${s}%,${l}%, 0.36) 96%`,
-            `hsla(${h},${s}%,${l}%, 0) 120%`
-        ].join(', ');
-        lightDiv.style.background = `radial-gradient(circle farthest-corner at 50% 50%, ${stops})`;
-    }
-}
-
-// =====================================
-// 核心动画与驱动引擎
-// =====================================
+// === 渲染主循环 ===
 let lastFrameTime = performance.now();
-let lastMidiSendTime = 0;
-let renderFrameCounter = 0; // 隔行扫描计数器
 
 function engineLoop(currentTime) {
     const deltaTime = currentTime - lastFrameTime;
     lastFrameTime = currentTime;
 
-    let isAnyPadActive = false;
-    let forceZeroFlush = false; 
+    // 1. 光源包络衰减 (Pad 0)
+    let sourcePad = window.padLightSources[0];
+    if (sourcePad.envelope > 0) {
+        let decrement = deltaTime / FADE_DURATION;
+        sourcePad.envelope -= decrement;
+        if (sourcePad.envelope <= 0) sourcePad.envelope = 0;
+    }
 
-    // 轨道 A：60Hz 视觉更新与 L 值衰减
+	// 【核心修复 1】：将最大亮度 L 限制为 60，避免死白
+    const MAX_LIGHTNESS = 60;
+    
+    // 【核心修复 2】：使用抛物线曲线计算视觉 Envelope (0~1)
+    let visualEnvelope = applyBrightnessCurve(sourcePad.envelope * 100, 100) / 100;
+    
+    // 亮度衰减：从 MAX_LIGHTNESS (60) 降到 IDLE_LIGHTNESS (0)
+    let currentL = IDLE_LIGHTNESS + (MAX_LIGHTNESS - IDLE_LIGHTNESS) * visualEnvelope;
+    
+    // 饱和度衰减：从目标饱和度 (通常是100) 逐渐降到 0
+    let currentS = sourcePad.userHSL.s * visualEnvelope;
+    
+    globalPadColors[0] = { 
+        h: sourcePad.userHSL.h, 
+        s: currentS, 
+        l: currentL 
+    };
+
+    // 2. 动效模块 (按 30Hz 推波)
+    if (currentTime - lastEngineTick >= ANIMATION_TICK) {
+        applyWaveEffect();
+        lastEngineTick = currentTime;
+    }
+
+    // 3. 渲染网页 UI
     for (let i = 0; i < 8; i++) {
-        let pad = globalPadColors[i];
-        
-        if (pad.currentL > 0) {
-            isAnyPadActive = true;
-
-            let decrement = (pad.baseHSL.l / FADE_DURATION) * deltaTime;
-            pad.currentL -= decrement;
-            
-            if (pad.currentL <= 0) {
-                pad.currentL = 0;
-                forceZeroFlush = true; 
-            }
-
-            // UI 渲染应用抛物线修正
-            let visualL = applyBrightnessCurve(pad.currentL, pad.baseHSL.l);
-            renderDOMColor(i, { h: pad.baseHSL.h, s: pad.baseHSL.s, l: visualL });
+        const lightDiv = document.getElementById(`vpad-light-${i}`);
+        if(lightDiv) {
+            let h = globalPadColors[i].h, s = globalPadColors[i].s, l = globalPadColors[i].l;
+            const stops = [
+                `hsla(${h},${s}%,${l}%, 1) 0%`,
+                `hsla(${h},${s}%,${l}%, 0.96) 10%`,
+                `hsla(${h},${s}%,${l}%, 0.84) 30%`,
+                `hsla(${h},${s}%,${l}%, 0.64) 68%`,
+                `hsla(${h},${s}%,${l}%, 0.36) 96%`,
+                `hsla(${h},${s}%,${l}%, 0) 120%`
+            ].join(', ');
+            lightDiv.style.background = `radial-gradient(circle farthest-corner at 50% 50%, ${stops})`;
         }
     }
 
-    // 轨道 B：10ms 隔行扫描硬件通讯
-    if (window.isRunning && window.midiOutput) {
-        if (forceZeroFlush || (isAnyPadActive && currentTime - lastMidiSendTime >= MIDI_UPDATE_INTERVAL)) {
-            
-            // 翻转帧计数器 (0变1，1变0)
-            renderFrameCounter = (renderFrameCounter + 1) % 2;
-
-            if (forceZeroFlush) {
-                // 如果有灯熄灭，破例发一次全量，绞杀残影
-                flushMidiBufferAll();
-            } else {
-                // 正常衰减时，执行交错渲染
-                flushMidiBufferInterlaced(renderFrameCounter);
-            }
-            
-            lastMidiSendTime = currentTime;
-        }
-    }
+    // 4. 发射器 
+    flushMidiDriver();
 
     requestAnimationFrame(engineLoop);
-}
-
-// === 执行 MIDI 隔行发送 ===
-function flushMidiBufferInterlaced(frame) {
-    // 每次仅处理 8 个 Pad 中的 4 个 (i=0,2,4,6 或 i=1,3,5,7)
-    for (let i = frame; i < 8; i += 2) {
-        let pad = globalPadColors[i];
-        
-        let visualL = applyBrightnessCurve(pad.currentL, pad.baseHSL.l);
-        let [r8, g8, b8] = hslToRgb(pad.baseHSL.h, pad.baseHSL.s, visualL);
-        
-        let r7 = Math.floor(r8 / 2);
-        let g7 = Math.floor(g8 / 2);
-        let b7 = Math.floor(b8 / 2);
-        
-        let padID = TOP_PADS[i];
-        window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, padID, r7, g7, b7, 0xF7]);
-    }
-}
-
-// === 执行 MIDI 全量发送 (针对上排 8 个 Pad) ===
-function flushMidiBufferAll() {
-    for (let i = 0; i < 8; i++) {
-        let pad = globalPadColors[i];
-        
-        let visualL = applyBrightnessCurve(pad.currentL, pad.baseHSL.l);
-        let [r8, g8, b8] = hslToRgb(pad.baseHSL.h, pad.baseHSL.s, visualL);
-        
-        let r7 = Math.floor(r8 / 2);
-        let g7 = Math.floor(g8 / 2);
-        let b7 = Math.floor(b8 / 2);
-        
-        let padID = TOP_PADS[i];
-        window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, padID, r7, g7, b7, 0xF7]);
-    }
 }

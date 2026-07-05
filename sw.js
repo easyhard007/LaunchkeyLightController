@@ -1,4 +1,4 @@
-const CACHE_NAME = 'launchkey-station-v0.61';
+const CACHE_NAME = 'launchkey-station-v0.74';
 const urlsToCache = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const urlsToCache = [
   './chord_detection.js',
   './light_control.js',
   './scale_chord_engine.js',
+  './color_mapping.js', 
   './modulation_engine.js',
   './manifest.json',
   './icon.png',

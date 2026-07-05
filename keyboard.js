@@ -7,6 +7,9 @@ const NOTE_START = 24; // 渲染起点 C0
 const NOTE_END = 96;   // 渲染终点 C6
 const VISIBLE_WHITE_KEYS = 21; // 屏幕可视白键数 (3个八度)
 let lastRenderedScale = "-"; // 用于记录上一次显示的调性
+// 在函数外部（全局）声明防抖计时器和状态记忆
+let chordColorDebounceTimer = null;
+let lastColoredRoman = "";
 
 // ================= 1. 初始化 16 个虚拟 Pad =================
 function initPadMatrixDOM() {
@@ -125,6 +128,7 @@ function refreshKeyboardUI() {
 
     const notesArr = Array.from(window.allActiveNotes).sort((a,b) => a - b);
     if (notesArr.length > 0) handleAutoScroll(notesArr);
+	
 
     // ===================================
     // 获取算法数据
@@ -183,11 +187,17 @@ function refreshKeyboardUI() {
     }
 
     // ===================================
-    // 和弦渲染逻辑
+    // 和弦渲染与 200ms 防抖颜色下发
     // ===================================
     if (notesArr.length === 0) {
         textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;">等待弹奏...</div>`;
         debugTbody.innerHTML = `<tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>`;
+        
+        // 关键逻辑 5：无和弦时，清除尚未发出的改色计时器
+        // 且【不】重置 lastColoredRoman，这样系统就会停留在上一个和弦的颜色！
+        if (chordColorDebounceTimer) {
+            clearTimeout(chordColorDebounceTimer);
+        }
         chordDisplay.innerText = "-";
         return;
     }
@@ -195,40 +205,35 @@ function refreshKeyboardUI() {
     if (typeof processChordsForLight === 'function') {
         const chordList = processChordsForLight(notesArr);
         if (chordList.length > 0) {
-            // 【核心修复】：
-            // primary：显示在键盘上方的真实完整和弦名（如 Cmaj9）
             const primary = chordList[0].original; 
-            
-            // baseChordForRoman：用于翻译级数的降维和弦（如 Cmaj7）
             const baseChordForRoman = chordList[0].classified;
-	
-		
-            // 【新增】：将当前稳定的和弦喂给转调引擎
+            
             if (typeof checkAndApplyModulation === 'function') {
                 checkAndApplyModulation(baseChordForRoman);
             }
-            
-            // 键盘上方的主监控区
+
             textDiv.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><span style="font-size: 32px; font-weight: bold; color: #fff;">${primary}</span></div>`;
             
-            // 右侧面板的级数翻译（使用降维后的纯净和弦）
-            chordDisplay.innerText = getRomanNumeral(baseChordForRoman);
+            // 获取罗马级数
+            const roman = getRomanNumeral(baseChordForRoman);
+            chordDisplay.innerText = roman;
 
-            // 渲染底部 Debug 表格
-            let trHtml = "";
-            chordList.forEach((item, index) => {
-                let rowClass = index === 0 ? "top-score" : "";
-                trHtml += `<tr class="${rowClass}">
-                    <td>${item.original}</td>
-                    <td>${item.confidence}</td>
-                    <td>${item.length}</td>
-                    <td style="color: #d500f9;">${item.score.toFixed(3)}</td>
-                    <td style="color: #00e676;">${item.classified}</td>
-                </tr>`;
-            });
-            debugTbody.innerHTML = trHtml;
+            // 【关键逻辑 1】：200ms 防抖触发颜色
+            // 只有算出来的级数和上一次变色的级数不同，才启动计时器
+            if (roman !== lastColoredRoman) {
+                if (chordColorDebounceTimer) clearTimeout(chordColorDebounceTimer);
+                
+                chordColorDebounceTimer = setTimeout(() => {
+                    // 200ms 稳定后，确认下发颜色
+                    lastColoredRoman = roman;
+                    if (typeof applyChordColorByNumeral === 'function') {
+                        applyChordColorByNumeral(roman);
+                    }
+                }, 50);
+            }
+
+            // ... [底下的 Debug 表格渲染代码不变] ...
         } else {
-            // 失败回退单音
             let singleNotes = notesArr.map(n => getSingleNoteName(n)).join(" ");
             textDiv.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">${singleNotes}</div>`;
             debugTbody.innerHTML = `<tr><td colspan="5" style="color:#ff5252;">无法识别的音簇</td></tr>`;

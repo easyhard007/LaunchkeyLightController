@@ -95,3 +95,5 @@ tr.top-score { background-color: rgba(0, 230, 118, 0.15); font-weight: bold; }
     animation: flash-text 0.6s ease-out;
     display: inline-block; /* 为了支持 transform 缩放 */
 }
+/* 隐藏 iro.js 原生的取色器手柄，因为我们要通过算法自动控制颜色 */
+.IroHandle { display: none !important; }
