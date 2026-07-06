@@ -1,13 +1,12 @@
 // ==========================================
-// 和弦颜色映射引擎 (Color Mapping Engine v4.0)
-// 包含：完美的数学坐标映射、准确的 RGB 色块同步
+// 和弦颜色映射引擎 (Color Mapping Engine v5.1)
+// 修复：正确写入 padLightSources，更新 260 蓝紫
 // ==========================================
 
-// 你的设定值
 let tsdColors = {
-    T: { h: 260, s: 100 }, // 蓝紫
-    S: { h: 20,  s: 100 }, // 橙红
-    D: { h: 170, s: 100 }  // 青绿
+    T: { h: 260, s: 100 }, // 你的绝美蓝紫
+    S: { h: 20,  s: 100 }, 
+    D: { h: 170, s: 100 }  
 };
 
 let svgOverlay = null;
@@ -32,6 +31,7 @@ function initTSDOverlay() {
     
     pickerContainer.appendChild(svgOverlay);
     drawTSDTriangle(width);
+    updateChordDotPosition(width);
 
     window.addEventListener('resize', () => {
         if(pickerContainer.clientWidth > 0) {
@@ -43,26 +43,13 @@ function initTSDOverlay() {
     });
 }
 
-// === 核心修复 1：绝对极坐标映射 ===
-// iro.js 默认：h=0(红)在12点，顺时针增加。
-// 我们要达到的视觉效果：h=0(红)在3点，逆时针增加（类似数学象限）。
-// 公式推导：
-// iro_angle = 12点(0度)。如果要让 h=0 在 3点(90度)，且逆时针(-hue)。
-// SVG_Angle = (90 - Hue + 360) % 360
-// 为了在 Math.sin/cos 中使用，需转为弧度，并减去 90 度(因为 SVG 0度在3点钟)
 function getPosFromHue(hue, size, saturation = 100) {
     const radius = size / 2;
-    // 数学变换：让颜色分布完美对齐你的视觉要求
     const visualAngle = (90 - hue + 360) % 360; 
     const angleRad = (visualAngle - 90) * (Math.PI / 180);
-    
     const maxR = radius - 15; 
     const r = maxR * (saturation / 100);
-    
-    return {
-        x: radius + r * Math.cos(angleRad),
-        y: radius + r * Math.sin(angleRad)
-    };
+    return { x: radius + r * Math.cos(angleRad), y: radius + r * Math.sin(angleRad) };
 }
 
 function drawTSDTriangle(size) {
@@ -76,8 +63,8 @@ function drawTSDTriangle(size) {
     const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
     polygon.setAttribute("points", `${pT.x},${pT.y} ${pS.x},${pS.y} ${pD.x},${pD.y}`);
     polygon.setAttribute("fill", "none");
-    polygon.setAttribute("stroke", "rgba(255, 255, 255, 0.4)");
-    polygon.setAttribute("stroke-width", "1");
+    polygon.setAttribute("stroke", "#ffffff");
+    polygon.setAttribute("stroke-width", "1.5");
     svgOverlay.appendChild(polygon);
 
     const pointsData = [
@@ -90,18 +77,17 @@ function drawTSDTriangle(size) {
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", pt.p.x);
         circle.setAttribute("cy", pt.p.y);
-        circle.setAttribute("r", "4");
-        circle.setAttribute("fill", "rgba(255, 255, 255, 0.6)");
+        circle.setAttribute("r", "5");
+        circle.setAttribute("fill", "#ffffff");
         svgOverlay.appendChild(circle);
 
-        // 外侧文字，由于去掉了 CSS 旋转，现在不需要反向旋转文字了，直接定位！
-        const textPos = getPosFromHue(pt.hue, size, 125); // 饱和度 125 推到外侧
+        const textPos = getPosFromHue(pt.hue, size, 145); 
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.setAttribute("x", textPos.x);
         text.setAttribute("y", textPos.y);
         text.setAttribute("fill", "#ffffff");
-        text.setAttribute("font-size", "16px");
-        text.setAttribute("font-weight", "bold");
+        text.setAttribute("font-size", "20px");
+        text.setAttribute("font-weight", "900");
         text.setAttribute("font-family", "sans-serif");
         text.setAttribute("text-anchor", "middle");
         text.setAttribute("dominant-baseline", "central");
@@ -110,17 +96,17 @@ function drawTSDTriangle(size) {
     });
 
     currentChordDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    currentChordDot.setAttribute("r", "8");
+    currentChordDot.setAttribute("r", "9");
     currentChordDot.setAttribute("fill", "none");
     currentChordDot.setAttribute("stroke", "#ffffff");
     currentChordDot.setAttribute("stroke-width", "3");
-    currentChordDot.style.display = "none";
+    currentChordDot.style.transition = "cx 0.35s cubic-bezier(0.1, 0.9, 0.2, 1), cy 0.35s cubic-bezier(0.1, 0.9, 0.2, 1)";
+    currentChordDot.style.filter = "drop-shadow(0px 3px 6px rgba(0, 0, 0, 0.8))";
     svgOverlay.appendChild(currentChordDot);
 }
 
-let currentTargetHSL = { h: 0, s: 0, l: 100 };
+let currentTargetHSL = { h: tsdColors.T.h, s: tsdColors.T.s, l: 100 };
 
-// 内部复用一个 HSL 转 RGB 的工具，用于修复右侧色块的显示颜色
 function getTrueRGB(h, s, l) {
     h /= 360; s /= 100; l /= 100;
     let r, g, b;
@@ -144,7 +130,6 @@ function applyChordColorByNumeral(romanNumeral) {
     if (!romanNumeral || romanNumeral === "-") return;
     
     const cleanNumeral = romanNumeral.replace(/b|#|m|maj|sus|dim|aug|[0-9]/g, "").toUpperCase();
-
     let targetH = 0; let targetS = 100; let targetL = 100; 
 
     switch (cleanNumeral) {
@@ -156,14 +141,14 @@ function applyChordColorByNumeral(romanNumeral) {
 
     currentTargetHSL = { h: targetH, s: targetS, l: targetL };
 
-    // 【核心修复】：把系统算出的目标颜色，注入给 Pad 1 的光源缓冲池！
+    // 【核心修复：正确写入独立光源池 padLightSources[0]】
     if (window.padLightSources && window.padLightSources[0]) {
         window.padLightSources[0].userHSL = { h: targetH, s: targetS, l: targetL };
     }
 
     const swatch = document.getElementById('color-swatch');
     if (swatch) {
-        const trueColor = getTrueRGB(targetH, targetS, 60);
+        const trueColor = getTrueRGB(targetH, targetS, 60); 
         swatch.style.backgroundColor = trueColor;
         swatch.style.boxShadow = `0 0 15px ${trueColor}`;
     }

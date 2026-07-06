@@ -112,50 +112,37 @@ function handleAutoScroll(notesArray) {
     }
 }
 
+
 function refreshKeyboardUI() {
-    // 1. 刷新琴键红粉点状态
+    // 1. 刷新 73 个琴键的视觉状态
     for (let i = NOTE_START; i <= NOTE_END; i++) {
         const keyDiv = document.getElementById(`key-${i}`);
         if (!keyDiv) continue;
+
         if (window.activeNotes.has(i)) {
-            keyDiv.classList.add('active-red'); keyDiv.classList.remove('active-pink');
+            keyDiv.classList.add('active-red');
+            keyDiv.classList.remove('active-pink');
         } else if (window.pedalHeldNotes.has(i)) {
-            keyDiv.classList.remove('active-red'); keyDiv.classList.add('active-pink');
+            keyDiv.classList.remove('active-red');
+            keyDiv.classList.add('active-pink');
         } else {
-            keyDiv.classList.remove('active-red'); keyDiv.classList.remove('active-pink');
+            keyDiv.classList.remove('active-red');
+            keyDiv.classList.remove('active-pink');
         }
     }
 
     const notesArr = Array.from(window.allActiveNotes).sort((a,b) => a - b);
     if (notesArr.length > 0) handleAutoScroll(notesArr);
-	
 
-    // ===================================
-    // 获取算法数据
-    // ===================================
     const textDiv = document.getElementById('pressed-notes');
     const debugTbody = document.getElementById('debug-tbody');
     const chordDisplay = document.getElementById('light-chord-display');
     const keyDisplay = document.getElementById('light-key-display');
 
-    // 调性引擎每时每刻都在运转（具有衰减记忆）
+    // 2. 调性引擎渲染 (实时)
     let scaleData = { bestText: "-", weights: new Array(12).fill(0), scales: [] };
     if (typeof getScaleDebugData === 'function') scaleData = getScaleDebugData();
-
-    // 更新 60/40 调性文本，并检测是否发生转调
-    if (scaleData.bestText !== lastRenderedScale && scaleData.bestText !== "-") {
-        lastRenderedScale = scaleData.bestText;
-        keyDisplay.innerText = scaleData.bestText;
-        
-        // 【新增】：触发文字闪烁动画
-        keyDisplay.classList.remove('flash-highlight-text');
-        void keyDisplay.offsetWidth; // 强制重绘
-        keyDisplay.classList.add('flash-highlight-text');
-    } else {
-        keyDisplay.innerText = scaleData.bestText;
-    }
-	
-	
+    keyDisplay.innerText = scaleData.bestText;
 
     // 渲染调性 Debug 面板
     if (document.getElementById('pitch-weights-row')) {
@@ -172,13 +159,8 @@ function refreshKeyboardUI() {
         let scHtml = "";
         if (scaleData.scales.length > 0) {
             scaleData.scales.forEach((s, idx) => {
-                // 第一名显示亮黄色高亮
                 let rowStyle = idx === 0 ? "background-color: rgba(255, 235, 59, 0.15); color: #ffeb3b; font-weight: bold;" : "";
-                scHtml += `<tr style="${rowStyle}">
-                    <td>${idx+1}</td>
-                    <td>${s.majorName}大调 / ${s.minorName}小调</td>
-                    <td style="color: #ffeb3b;">${s.score.toFixed(3)}</td>
-                </tr>`;
+                scHtml += `<tr style="${rowStyle}"><td>${idx+1}</td><td>${s.majorName}大调 / ${s.minorName}小调</td><td style="color: #ffeb3b;">${s.score.toFixed(3)}</td></tr>`;
             });
         } else {
             scHtml = `<tr><td colspan="3" style="color:#666;">等待弹奏...</td></tr>`;
@@ -186,58 +168,105 @@ function refreshKeyboardUI() {
         document.getElementById('scale-debug-tbody').innerHTML = scHtml;
     }
 
-    // ===================================
-    // 和弦渲染与 200ms 防抖颜色下发
-    // ===================================
+    // 3. 和弦 UI 渲染 (空状态处理)
     if (notesArr.length === 0) {
-        textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;">等待弹奏...</div>`;
+        textDiv.innerHTML = `
+            <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
+                <span style="color:#666; font-size:16px;">等待弹奏...</span>
+            </div>
+            <div style="height: 40%;"></div>
+        `;
         debugTbody.innerHTML = `<tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>`;
-        
-        // 关键逻辑 5：无和弦时，清除尚未发出的改色计时器
-        // 且【不】重置 lastColoredRoman，这样系统就会停留在上一个和弦的颜色！
-        if (chordColorDebounceTimer) {
-            clearTimeout(chordColorDebounceTimer);
-        }
         chordDisplay.innerText = "-";
+        
+        if (typeof checkAndApplyModulation === 'function') checkAndApplyModulation("");
         return;
     }
 
+    // 4. 和弦识别与渲染 (实体状态)
     if (typeof processChordsForLight === 'function') {
         const chordList = processChordsForLight(notesArr);
+        
         if (chordList.length > 0) {
             const primary = chordList[0].original; 
+            const primaryRootMatch = primary.match(/^[A-G][#b]?/);
+            const primaryRoot = primaryRootMatch ? primaryRootMatch[0] : "";
+            
             const baseChordForRoman = chordList[0].classified;
+            
+            // 【核心规则新增】：提取备选和弦，但如果根音和首选一致，则抛弃！
+            let secondaryHtml = "";
+            if (chordList.length > 1) {
+                const secondary = chordList[1].original;
+                const secondaryRootMatch = secondary.match(/^[A-G][#b]?/);
+                const secondaryRoot = secondaryRootMatch ? secondaryRootMatch[0] : "";
+                
+                // 只有当备选和弦存在，且根音和首选不同时，才显示！
+                if (secondaryRoot !== primaryRoot) {
+                    secondaryHtml = `
+                        <span style="font-size: 12px; color: rgba(255,255,255,0.3); margin-right: 8px; font-weight: normal;">OR</span>
+                        <span style="font-size: 18px; color: #ccc; font-weight: bold;">${secondary}</span>
+                    `;
+                }
+            }
+            
+            // 无论有没有备选和弦，60/40 的结构写死，绝对不跳动上下居中
+            textDiv.innerHTML = `
+                <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
+                    <span style="font-size: 32px; font-weight: bold; color: #fff;">${primary}</span>
+                </div>
+                <div style="height: 40%; display: flex; align-items: baseline; justify-content: center; padding-top: 2px;">
+                    ${secondaryHtml}
+                </div>
+            `;
             
             if (typeof checkAndApplyModulation === 'function') {
                 checkAndApplyModulation(baseChordForRoman);
             }
 
-            textDiv.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><span style="font-size: 32px; font-weight: bold; color: #fff;">${primary}</span></div>`;
-            
-            // 获取罗马级数
             const roman = getRomanNumeral(baseChordForRoman);
             chordDisplay.innerText = roman;
 
-            // 【关键逻辑 1】：200ms 防抖触发颜色
-            // 只有算出来的级数和上一次变色的级数不同，才启动计时器
+            // 渲染底部 Debug 表格 (实时)
+            let trHtml = "";
+            chordList.forEach((item, index) => {
+                let rowClass = index === 0 ? "top-score" : "";
+                trHtml += `<tr class="${rowClass}">
+                    <td>${item.original}</td>
+                    <td>${item.confidence}</td>
+                    <td>${item.length}</td>
+                    <td style="color: #d500f9;">${item.score.toFixed(3)}</td>
+                    <td style="color: #00e676;">${item.classified}</td>
+                </tr>`;
+            });
+            debugTbody.innerHTML = trHtml;
+
+            // ===================================
+            // 5. 【灯光颜色下发】：严格的 30ms 防抖
+            // ===================================
             if (roman !== lastColoredRoman) {
                 if (chordColorDebounceTimer) clearTimeout(chordColorDebounceTimer);
                 
                 chordColorDebounceTimer = setTimeout(() => {
-                    // 200ms 稳定后，确认下发颜色
                     lastColoredRoman = roman;
                     if (typeof applyChordColorByNumeral === 'function') {
                         applyChordColorByNumeral(roman);
                     }
-                }, 50);
+                }, 30);
             }
 
-            // ... [底下的 Debug 表格渲染代码不变] ...
         } else {
-            let singleNotes = notesArr.map(n => getSingleNoteName(n)).join(" ");
-            textDiv.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">${singleNotes}</div>`;
-            debugTbody.innerHTML = `<tr><td colspan="5" style="color:#ff5252;">无法识别的音簇</td></tr>`;
+            // 【核心修改】：失败回退时（比如单音），什么都不显示，保持 60/40 的空壳结构
+            textDiv.innerHTML = `
+                <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
+                    <span style="color:#666; font-size:16px;">等待和弦...</span>
+                </div>
+                <div style="height: 40%;"></div>
+            `;
+            debugTbody.innerHTML = `<tr><td colspan="5" style="color:#ff5252;">单音或无法识别</td></tr>`;
             chordDisplay.innerText = "-";
+            
+            if (typeof checkAndApplyModulation === 'function') checkAndApplyModulation("");
         }
     }
 }
