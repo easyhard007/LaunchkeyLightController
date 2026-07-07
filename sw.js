@@ -4,7 +4,6 @@ const urlsToCache = [
   './index.html',
   './style.css',          
   './keyboard.js',        
-  './chord_detection.js',
   './light_control.js',
   './scale_chord_engine.js',
   './virtual_piano_engine.js',

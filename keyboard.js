@@ -134,15 +134,36 @@ function refreshKeyboardUI() {
     const notesArr = Array.from(window.allActiveNotes).sort((a,b) => a - b);
     if (notesArr.length > 0) handleAutoScroll(notesArr);
 
-    const textDiv = document.getElementById('pressed-notes');
+	const textDiv = document.getElementById('pressed-notes');
     const debugTbody = document.getElementById('debug-tbody');
-    const chordDisplay = document.getElementById('light-chord-display');
+	
+    const romanDisplay = document.getElementById('light-roman-display');
+    const functionDisplay = document.getElementById('light-function-display');
     const keyDisplay = document.getElementById('light-key-display');
 
     // 2. 调性引擎渲染 (实时)
     let scaleData = { bestText: "-", weights: new Array(12).fill(0), scales: [] };
     if (typeof getScaleDebugData === 'function') scaleData = getScaleDebugData();
-    keyDisplay.innerText = scaleData.bestText;
+	
+    //检测调性改变并触发联动闪烁！
+    if (scaleData.bestText !== lastRenderedScale && scaleData.bestText !== "-") {
+        lastRenderedScale = scaleData.bestText;
+        keyDisplay.innerText = scaleData.bestText;
+        
+        // 触发调性文字的闪烁
+        keyDisplay.classList.remove('flash-highlight-text');
+        void keyDisplay.offsetWidth; // 魔法：强制重绘以重新触发动画
+        keyDisplay.classList.add('flash-highlight-text');
+
+        // 联动触发上方巨大的功能级数文字 (VI) 的闪烁
+        if (functionDisplay) {
+            functionDisplay.classList.remove('flash-highlight-text');
+            void functionDisplay.offsetWidth; 
+            functionDisplay.classList.add('flash-highlight-text');
+        }
+    } else {
+        keyDisplay.innerText = scaleData.bestText;
+    }
 
     // 渲染调性 Debug 面板
     if (document.getElementById('pitch-weights-row')) {
@@ -170,16 +191,12 @@ function refreshKeyboardUI() {
 
     // 3. 和弦 UI 渲染 (空状态处理)
     if (notesArr.length === 0) {
-        textDiv.innerHTML = `
-            <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
-                <span style="color:#666; font-size:16px;">等待弹奏...</span>
-            </div>
-            <div style="height: 40%;"></div>
-        `;
+		textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;">等待弹奏...</div>`;
         debugTbody.innerHTML = `<tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>`;
-        chordDisplay.innerText = "-";
         
-        if (typeof checkAndApplyModulation === 'function') checkAndApplyModulation("");
+        if (typeof detectScaleSmart === 'function') keyDisplay.innerText = detectScaleSmart([]);
+        romanDisplay.innerText = "-";
+        // 功能组保持上次状态或者重置，现在暂时不改它
         return;
     }
 
@@ -224,8 +241,15 @@ function refreshKeyboardUI() {
                 checkAndApplyModulation(baseChordForRoman);
             }
 
+            // ===================================
+            // 【核心修复】：剥离大字和小字的渲染时机
+            // ===================================
             const roman = getRomanNumeral(baseChordForRoman);
-            chordDisplay.innerText = roman;
+            const romanDisplay = document.getElementById('light-roman-display');
+            const functionDisplay = document.getElementById('light-function-display');
+            
+            // 小字 (如 IVmaj7) 属于实时分析，绝对零延迟上屏
+            if (romanDisplay) romanDisplay.innerText = roman;
 
             // 渲染底部 Debug 表格 (实时)
             let trHtml = "";
@@ -241,21 +265,26 @@ function refreshKeyboardUI() {
             });
             debugTbody.innerHTML = trHtml;
 
-            // ===================================
-            // 5. 【灯光颜色下发】：严格的 30ms 防抖
-            // ===================================
+            // 灯光颜色下发与大字渲染：严格遵守 30ms 防抖！
+            // 只有当和弦稳稳站住 30ms，灯光发生切换的瞬间，中心的大字才跟着灯光一起“啪”地跳出来！
             if (roman !== lastColoredRoman) {
                 if (chordColorDebounceTimer) clearTimeout(chordColorDebounceTimer);
                 
                 chordColorDebounceTimer = setTimeout(() => {
                     lastColoredRoman = roman;
+                    
                     if (typeof applyChordColorByNumeral === 'function') {
-                        applyChordColorByNumeral(roman);
+                        // 将原始罗马数字 (如 IVmaj7) 传给颜色引擎
+                        // 引擎内部会清洗出纯净的 "IV"，并改变硬件灯光
+                        // 我们直接接住引擎返回的 "IV" 把它写到大屏幕上！
+                        const cleanFunctionText = applyChordColorByNumeral(roman);
+                        if (functionDisplay) functionDisplay.innerText = cleanFunctionText;
                     }
                 }, 30);
             }
 
         } else {
+            console.log(chordList);
             // 【核心修改】：失败回退时（比如单音），什么都不显示，保持 60/40 的空壳结构
             textDiv.innerHTML = `
                 <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
@@ -264,7 +293,7 @@ function refreshKeyboardUI() {
                 <div style="height: 40%;"></div>
             `;
             debugTbody.innerHTML = `<tr><td colspan="5" style="color:#ff5252;">单音或无法识别</td></tr>`;
-            chordDisplay.innerText = "-";
+            romanDisplay.innerText = "-";
             
             if (typeof checkAndApplyModulation === 'function') checkAndApplyModulation("");
         }

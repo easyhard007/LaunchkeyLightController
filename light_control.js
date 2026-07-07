@@ -66,10 +66,6 @@ function flushMidiDriver() {
         }
     }
     
-    // 探针输出：检查 MIDI 是否真的发出去了
-    if (sysExSentThisFrame && debugLogCounter % 15 === 0) {
-        console.log(`[Driver] 发送了新的 MIDI 灯光指令! Pad1 色彩: H=${globalPadColors[0].h.toFixed(1)}, L=${globalPadColors[0].l.toFixed(1)}`);
-    }
 }
 
 function interpolateHSL(source, target, progress) {
@@ -147,10 +143,7 @@ function engineLoop(currentTime) {
     // ================== 探针 2：音量读取 ==================
     let rawVolume = window.virtualAudioVolume || 0;
     
-    // 如果你在弹琴，但控制台里这个数值一直是 0，说明 virtual_piano_engine 挂了
-    if (rawVolume > 0 && debugLogCounter % 30 === 0) {
-         console.log(`[Engine] 检测到虚拟音量输入: ${rawVolume.toFixed(3)}`);
-    }
+
     
     if (rawVolume > smoothedVolume) {
         smoothedVolume = smoothedVolume * BETA_ATTACK + rawVolume * (1 - BETA_ATTACK);
@@ -215,4 +208,36 @@ function engineLoop(currentTime) {
     }
 
     requestAnimationFrame(engineLoop);
+}
+
+// === 【新增】：硬件握手确认（两次纯白闪烁） ===
+function triggerHandshakeFlash() {
+    if (!window.midiOutput) return;
+
+    // 辅助函数：立刻把 16 个 Pad 全设为某个 RGB 颜色
+    const flashAll = (r, g, b) => {
+        for (let i = 0; i < 16; i++) {
+            let padID = i < 8 ? TOP_PADS[i] : BOTTOM_PADS[i - 8];
+            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, padID, r, g, b, 0xF7]);
+        }
+    };
+
+    // 白光全亮 (127 为 7-bit 最高亮度)
+    flashAll(127, 127, 127);
+
+    setTimeout(() => {
+        flashAll(0, 0, 0); // 全灭
+        
+        setTimeout(() => {
+            flashAll(127, 127, 127); // 再次白光全亮
+            
+            setTimeout(() => {
+                flashAll(0, 0, 0); // 再次全灭
+                
+                // 闪烁完毕后，强制把当前的调色盘静默颜色刷回给硬件，恢复正常引擎控制
+                forceSendCurrentColorToMidi();
+                
+            }, 100);
+        }, 100);
+    }, 100);
 }

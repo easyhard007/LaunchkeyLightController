@@ -13,6 +13,96 @@ function getSingleNoteName(note) {
     return `${PITCH_NAMES[note % 12]}${Math.floor(note / 12) - 2}`;
 }
 
+// --------------------------------------------------
+// 【新增核心功能】：利用当前全局调性，裁决 7(omit3) 是大是小
+// --------------------------------------------------
+function resolveOmit3SeventhChord(bassPc) {
+    // 假设还未识别出调性，默认按最常见的属七返回
+    if (typeof globalScaleRoot === 'undefined' || globalScaleRoot === "-") {
+        return "7(omit3)";
+    }
+
+    // 获取当前调性根音的 Pitch Class (0-11)
+    const scaleRootPc = Tonal.Note.chroma(globalScaleRoot);
+    
+    // 计算当前和弦根音与调性根音的半音差
+    const rootDiff = (bassPc - scaleRootPc + 12) % 12;
+
+    // 根据大调顺阶和弦法则：
+    // I(0), IV(5), V(7) 级的基础三和弦是大三和弦 -> 应该补充为 7(omit3)
+    // ii(2), iii(4), vi(9) 级的基础三和弦是小三和弦 -> 应该补充为 m7(omit3)
+    if ([0, 5, 7].includes(rootDiff)) {
+        return "7(omit3)"; // 虽然大调 I 和 IV 是 maj7，但在 "0,7,10" 的骨架下，10是小七度，说明这就是一个属七和弦或蓝调离调
+    } else if ([2, 4, 9].includes(rootDiff)) {
+        return "m7(omit3)";
+    } else {
+        // 对于其他的离调根音（如 bIII, bVI 等），保守返回 7(omit3)
+        return "7(omit3)";
+    }
+}
+
+
+// --------------------------------------------------
+// 【新增核心功能】：调性双音/单音推断引擎 (Diatonic Dyad Implication)
+// 专门对付只有 1~2 个 Pitch Class 的残缺和弦
+// --------------------------------------------------
+function getDiatonicDyadChord(midiNotes) {
+    if (typeof globalScaleRoot === 'undefined' || globalScaleRoot === "-") return null;
+
+    // 提取去重后的 Pitch Class (0-11)
+    const pcs = Array.from(new Set(midiNotes.map(n => n % 12))).sort((a, b) => a - b);
+    
+    const scaleRootPc = Tonal.Note.chroma(globalScaleRoot);
+    
+    // 计算相对于当前调性根音的半音程差 (0-11)
+    const diffs = pcs.map(pc => (pc - scaleRootPc + 12) % 12).sort((a, b) => a - b);
+
+    // 辅助函数：根据音级差找回真实的音名
+    const getNoteNameByDiff = (diff) => {
+        const targetPc = (scaleRootPc + diff) % 12;
+        // 这里可以直接用 PITCH_NAMES，因为后面会被统一清洗
+        return PITCH_NAMES[targetPc]; 
+    };
+
+    // 规则 1 & 2：只有 1 个有效的音名 (如单音，或 C4+C5 八度)
+    if (diffs.length === 1) {
+        const d = diffs[0];
+        const rootName = getNoteNameByDiff(d);
+        // 大调顺阶三和弦映射表：I(M), ii(m), iii(m), IV(M), V(M), vi(m), vii(dim)
+        switch(d) {
+            case 0: return rootName;       // I
+            case 2: return rootName + "m"; // ii
+            case 4: return rootName + "m"; // iii
+            case 5: return rootName;       // IV
+            case 7: return rootName;       // V (大三)
+            case 9: return rootName + "m"; // vi
+            case 11: return rootName + "dim";// vii
+            default: return null;          // 离调单音，不作推断
+        }
+    }
+
+    // 规则 3：刚好 2 个不同的音名 (Dyads)
+    if (diffs.length === 2) {
+        // 生成逗号分隔的特征字符串进行精准匹配
+        const sig = diffs.join(','); 
+        
+        switch(sig) {
+            case "0,4":  return getNoteNameByDiff(0);           // [0]M (C,E -> C)
+            case "0,9":  return getNoteNameByDiff(9) + "m";     // [+9]m (C,A -> Am)
+            case "0,11": return getNoteNameByDiff(0) + "maj7";  // [0]maj7 (C,B -> Cmaj7)
+            case "2,5":  return getNoteNameByDiff(2) + "m";     // [+2]m (D,F -> Dm)
+            case "2,11": return getNoteNameByDiff(7);           // [+7]M (D,B -> G)
+            case "4,7":  return getNoteNameByDiff(4) + "m";     // [+4]m (E,G -> Em)
+            case "5,9":  return getNoteNameByDiff(5);           // [+5]M (F,A -> F)
+            case "7,11": return getNoteNameByDiff(7);           // [+7]M (G,B -> G)
+            default:     return null;                           // 未匹配模板
+        }
+    }
+
+    return null;
+}
+// --------------------------------------------------
+
 // ================= 1. 新增：低音锚点备选引擎 =================
 
 function getBassAnchorChord(midiNotes) {
@@ -110,44 +200,64 @@ function evaluateConfidence(chordName, bassMidi) {
     return Math.max(0.1, conf); 
 }
 
+// 2. 核心功能：和弦降维归类 (Classification v3.0 - 绞杀大写M幽灵版)
 function classifyChord(chordName) {
     let base = chordName.split('/')[0];
-    base = base.replace(/[b#][59]/g, '').replace(/b13/g, '').replace(/#11/g, '').replace(/add[0-9]+/g, '');
+    
+    // 【核心清洗】：在清洗变化音的同时，彻底干掉孤立的大写 M，以及 add 附缀
+    // 注意：不要误杀 maj 里面的 m 或 M7 里的 M，所以我们要精确匹配！
+    base = base
+        .replace(/[b#][59]/g, '')     // 杀变化音 b5, #5, b9, #9
+        .replace(/b13/g, '')          // 杀 b13
+        .replace(/#11/g, '')          // 杀 #11
+        .replace(/add[0-9]+/g, '');   // 杀 add9, add11 等
+
     const rootMatch = base.match(/^[A-G][#b]?/);
     if (!rootMatch) return chordName; 
+    
     const root = rootMatch[0];
-    const suffix = base.substring(root.length); 
+    let suffix = base.substring(root.length); 
 
-    if (suffix.includes('maj') || suffix.includes('M7') || suffix.includes('M9')) return root + 'maj7';
-    else if ((suffix.includes('m') || suffix.includes('min')) && suffix.match(/[79]|11|13/)) return root + 'm7';
-    else if (suffix.match(/[79]|11|13/)) return root + '7';
-    else if (suffix === 'm' || suffix === 'min' || suffix === 'm(maj7)') return root + 'm';
-    else return root; 
+    // 【关键】：如果经过上面的清洗，后缀就剩下一个孤零零的大写 "M" 
+    // (这是 Tonal.js 对大三和弦的倔强)，我们强行把它清空！
+    if (suffix === 'M') {
+        suffix = '';
+    }
+
+    // d) 根据后缀进行严格的 5 大类强制归类
+    // 1. 大七和弦 (Major 7th)：包含 maj, M7, M9, maj9 等
+    if (suffix.includes('maj') || suffix.includes('M7') || suffix.includes('M9')) {
+        return root + 'maj7';
+    } 
+    // 2. 小七和弦 (Minor 7th)：以 m/min 开头，且带有 7, 9, 11
+    else if ((suffix.includes('m') || suffix.includes('min')) && suffix.match(/[79]|11|13/)) {
+        return root + 'm7';
+    } 
+    // 3. 属七和弦 (Dominant 7th)：没有任何 m/maj，直接带 7, 9, 11, 13
+    else if (suffix.match(/[79]|11|13/)) {
+        return root + '7';
+    } 
+    // 4. 小三和弦 (Minor Triad)：只有 m, min，没有任何数字
+    else if (suffix === 'm' || suffix === 'min' || suffix === 'm(maj7)') {
+        return root + 'm';
+    } 
+    // 5. 大三和弦 (Major Triad)：完全没有后缀
+    else {
+        return root; 
+    }
 }
 
-// ================= 3. 核心：双引擎和弦处理 =================
-
+// === 3. 处理琴键输入，生成排名列表 ===
 function processChordsForLight(midiNotes) {
-    if (midiNotes.length === 0) return [];
-    
-    // 【新动作 1】：获取物理低音锚点备选和弦
-    const bassAnchor = getBassAnchorChord(midiNotes);
-
-    // 如果只弹了 1 个音，直接走备选引擎，绕过 Tonal
-    if (midiNotes.length < 2) {
-        if (bassAnchor) {
-            return [{
-                original: bassAnchor.name, confidence: "1.00", length: bassAnchor.name.length,
-                score: 5.0, classified: classifyChord(bassAnchor.name)
-            }];
-        }
-        return [];
-    }
+    if (midiNotes.length < 2) return [];
 
     let rawResults = new Map();
     let currentNotes = [...midiNotes]; 
     const originalBassMidi = midiNotes[0]; 
 
+    // ----------------------------------------------------
+    // 阵营 A：Tonal.js 及其高音修剪 (Top-Note Pruning)
+    // ----------------------------------------------------
     while (currentNotes.length >= 2) {
         let pitchClasses = Array.from(new Set(currentNotes.map(n => Tonal.Midi.midiToNoteName(n, {pitchClass:true}))));
         let bassClass = Tonal.Midi.midiToNoteName(originalBassMidi, {pitchClass:true});
@@ -158,7 +268,7 @@ function processChordsForLight(midiNotes) {
         tonalResults.forEach(chord => {
             if (!rawResults.has(chord)) {
                 let conf = evaluateConfidence(chord, originalBassMidi);
-                let pruningPenalty = (midiNotes.length - currentNotes.length) * 0.05;
+                let pruningPenalty = (midiNotes.length - currentNotes.length) * 0.5;
                 conf = Math.max(0.1, conf - pruningPenalty);
                 rawResults.set(chord, conf);
             }
@@ -167,44 +277,125 @@ function processChordsForLight(midiNotes) {
     }
 
     let processedList = [];
+    
+    // 计算 Tonal 阵营的得分并加入列表
     rawResults.forEach((conf, chord) => {
+		
+		chord = chord.replace(/^([A-G][#b]?)M/, '$1');
+		
+        let len = chord.length;
         let penalty = 0;
-        if (chord.match(/[#b][59]|#11|b13/)) penalty += 0.8;
+
+        if (chord.match(/[#b][59]|#11|b13|6/)) penalty += 0.8;
         if (chord.includes('bb') || chord.includes('##')) penalty += 0.2;
 
         let score = (conf * 5.0) - penalty; 
-        
-        // 【新动作 2】：低音锚点奖赏！
-        // 如果 Tonal 计算出的和弦，它的根音和我们物理计算出的根音一样，直接奖励 +1.0 分！
-        if (bassAnchor) {
-            let tChord = Tonal.Chord.get(chord);
-            if (tChord && tChord.tonic) {
-                // Tonal 的 tonic(比如D#) 和我们的 rootPc(3) 进行音级转换对比
-                let tRootPc = Tonal.Note.chroma(tChord.tonic);
-                if (tRootPc === bassAnchor.rootPc) {
-                    score += 1.0; 
-                }
-            }
-        }
-
+		
+		// 遇到括号直接一刀切！比如 Cmaj7(omit3) 直接变成 Cmaj7
+        let cleanedChord = chord.replace(/\(.*?\)/g, '');
+		
+		// 我们不再需要 classified 这个额外的字段了，
+		// 甚至连 processedList 的结构也可以简化，不过为了兼容前端 UI，
+        // 我们暂时把 cleanedChord 塞进 classified 字段传出去。
         processedList.push({ 
-            original: chord, confidence: conf.toFixed(2), length: chord.length, 
-            score: score, classified: classifyChord(chord) 
+            original: chord, 
+            confidence: conf.toFixed(2), 
+            length: chord.length, 
+            score: score, 
+            classified: cleanedChord  // <--- 让清洗后的结果直接充当之前的“归类”
         });
     });
 
-    processedList.sort((a, b) => b.score - a.score);
+    // ----------------------------------------------------
+    // 阵营 B：黑字典特征向量匹配 (Shell Voicings)
+    // ----------------------------------------------------
+    const bassName = Tonal.Midi.midiToNoteName(originalBassMidi, { pitchClass: true }); 
+    const bassPc = originalBassMidi % 12; // 获取根音音级 (0-11)
+    const intervals = Array.from(new Set(midiNotes.map(n => (n - originalBassMidi) % 12))).sort((a,b)=>a-b);
+    const signature = intervals.join(','); 
 
-    // 【新动作 3】：备胎上位机制
-    // 如果 Tonal 全军覆没（比如全被扣成了低分），或者根本没算出结果
-    // 只要我们的低音引擎算出来了，强行把它塞进第一名！
-    if (bassAnchor && (processedList.length === 0 || processedList[0].score < 2.0)) {
-        processedList.unshift({
-            original: bassAnchor.name, confidence: "1.00", length: bassAnchor.name.length,
-            score: 5.0, classified: classifyChord(bassAnchor.name)
-        });
+    const CUSTOM_CHORDS = {
+        "0,7,11": "maj7(omit3)", 
+        "0,2,7,11": "maj9(omit3)", 
+        "0,4,11": "maj7(omit5)", 
+        "0,3,10": "m7(omit5)", 
+    //    "0,8": "aug(omit3)",
+    //    "0,6": "dim(omit3)", 
+        "0,7": "5"
+        // 删掉了写死的 "0,7,10": "7(omit3)"，改为动态解析
+    };
+
+    if (CUSTOM_CHORDS[signature]) {
+        let dictSuffix = CUSTOM_CHORDS[signature];
+        if (signature === "0,7,10") {
+            dictSuffix = resolveOmit3SeventhChord(bassPc);
+        }
+
+        if (dictSuffix) {
+            let dictName = bassName + dictSuffix;
+            let existing = processedList.find(r => r.original === dictName);
+            
+            let dictConf = 1.0;
+            let dictScore = (dictConf * 5.0) - 0; 
+            
+            if (existing) {
+                existing.source = 'Tonal + Dict';
+                if (existing.score < dictScore) {
+                    existing.score = dictScore;
+                    existing.confidence = "1.00 [Dict Boost]";
+                }
+            } else {
+                processedList.push({
+                    original: dictName,
+                    confidence: "1.00", 
+                    length: dictName.length,     
+                    score: dictScore,     
+                    // 【关键替换】
+                    classified: dictName.replace(/\(.*?\)/g, ''),
+                    source: '[Dict]' 
+                });
+            }
+        }
     }
+	
+	
+	// ----------------------------------------------------
+    // 阵营 C：调性双音推断 (Diatonic Implication)
+    // 专门拯救被 Tonal 放弃、且没命中黑字典的 1~2 音组合
+    // ----------------------------------------------------
+    const diatonicImpliedName = getDiatonicDyadChord(midiNotes);
+    if (diatonicImpliedName) {
+        let existing = processedList.find(r => r.original === diatonicImpliedName);
+        
+        // 赋予极高置信度。因为它基于全局调性上下文，比 Tonal 的瞎猜准确得多
+        let diatonicScore = (1.0 * 5.0) - 0; // 满分 5.0
+        
+        if (existing) {
+            // 如果 Tonal 也恰好猜中了，加上联合印记
+            existing.source += ' + Diatonic';
+            if (existing.score < diatonicScore) {
+                existing.score = diatonicScore;
+                existing.confidence = "1.00 [Diatonic Boost]";
+            }
+        } else {
+            // 如果没人猜中，它作为新王登基！
+			processedList.push({
+                original: diatonicImpliedName,
+                confidence: "1.00", 
+                length: diatonicImpliedName.length,     
+                score: diatonicScore,     
+                // 【关键替换】
+                classified: diatonicImpliedName.replace(/\(.*?\)/g, ''),
+                source: '[Diatonic]' 
+            });
+        }
+    }
+	
+	
 
+    // 按照最终得分排序 (高分在上)
+    processedList.sort((a, b) => b.score - a.score);
+    
     return processedList;
 }
 
@@ -254,7 +445,7 @@ setInterval(() => {
         }
     }
 }, 500);
-// ---------------------------------
+
 
 function registerNoteForScale(note) {
     // 每次弹琴，重置最后弹琴时间
@@ -305,6 +496,8 @@ function getScaleDebugData() {
 // ================= 3. 级数转换与等音纠错 =================
 
 // 辅助函数：将和弦的根音翻转为等音名 (如 Gb 变成 F#)
+// ================= 3. 级数转换与等音纠错 =================
+
 function getEnharmonicChord(chordName) {
     const rootMatch = chordName.match(/^[A-G][#b]?/);
     if (!rootMatch) return chordName;
@@ -312,7 +505,6 @@ function getEnharmonicChord(chordName) {
     const root = rootMatch[0];
     const suffix = chordName.substring(root.length);
 
-    // 常用等音名映射字典
     const enharmonicMap = {
         'C#': 'Db', 'Db': 'C#',
         'D#': 'Eb', 'Eb': 'D#',
@@ -329,32 +521,32 @@ function getEnharmonicChord(chordName) {
     return chordName;
 }
 
-// 核心级数翻译函数
+// 核心级数翻译函数 (纯监控版，不包含强制前缀修正)
 function getRomanNumeral(chordName) {
-    if (globalScaleRoot === "-") return chordName; // 还没算出调性时，原样输出和弦名
+    if (globalScaleRoot === "-") return chordName; 
 
     try {
         // 第一轮常规翻译
         const romanArr = Tonal.Progression.toRomanNumerals(globalScaleRoot, [chordName]);
         let roman = (romanArr && romanArr.length > 0) ? romanArr[0] : "";
 
-        // 【核心补丁】：如果发现翻译出来含有重降(bb)或重升(##)，说明拼写方向反了
+        
+        // 处理重降/重升的等音翻转 (保留此底层纠错，因为 bbVIIm 这种绝对是乱码)
         if (roman.includes('bb') || roman.includes('##')) {
-            // 将和弦翻转为等音名，比如 Gbm 翻转为 F#m
             const flippedChord = getEnharmonicChord(chordName);
-            
-            // 用翻转后的和弦再翻译一次
             const romanArr2 = Tonal.Progression.toRomanNumerals(globalScaleRoot, [flippedChord]);
             let roman2 = (romanArr2 && romanArr2.length > 0) ? romanArr2[0] : "";
+        
             
-            // 如果第二次翻译的结果变正常了，就采用第二次的结果
             if (roman2 && !roman2.includes('bb') && !roman2.includes('##')) {
-                return roman2;
+                roman = roman2;
             }
         }
 
         if (roman !== "") return roman;
-    } catch(e) {}
+    } catch(e) {
+        console.error("[Roman Engine] 报错: ", e);
+    }
     
-    return chordName; // 翻译彻底失败时回退为原名
+    return chordName; 
 }

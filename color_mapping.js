@@ -1,12 +1,17 @@
 // ==========================================
-// 和弦颜色映射引擎 (Color Mapping Engine v5.1)
-// 修复：正确写入 padLightSources，更新 260 蓝紫
+// 和弦颜色映射引擎 (Color Mapping Engine v6.0)
+// 七大顺阶色彩体系 (Diatonic Seven-Color System)
 // ==========================================
 
-let tsdColors = {
-    T: { h: 260, s: 100 }, // 你的绝美蓝紫
-    S: { h: 20,  s: 100 }, 
-    D: { h: 170, s: 100 }  
+// 7 大级数色彩库
+let diatonicColors = {
+    I:   { h: 260, s: 100 }, // 蓝紫
+    IV:  { h: 20,  s: 100 }, // 橙红
+    V:   { h: 170, s: 100 }, // 青绿
+    ii:  { h: 43,  s: 40 }, // 金黄
+    iii: { h: 228, s: 70 }, // 深海蓝
+    vi:  { h: 290, s: 60 }, // 粉紫
+    vii: { h: 130, s: 30 }  // 绿色 (减和弦)
 };
 
 let svgOverlay = null;
@@ -56,9 +61,9 @@ function drawTSDTriangle(size) {
     if (!svgOverlay) return;
     svgOverlay.innerHTML = ''; 
 
-    const pT = getPosFromHue(tsdColors.T.h, size, tsdColors.T.s);
-    const pS = getPosFromHue(tsdColors.S.h, size, tsdColors.S.s);
-    const pD = getPosFromHue(tsdColors.D.h, size, tsdColors.D.s);
+    const pT = getPosFromHue(diatonicColors.I.h, size, diatonicColors.I.s);
+    const pS = getPosFromHue(diatonicColors.IV.h, size, diatonicColors.IV.s);
+    const pD = getPosFromHue(diatonicColors.V.h, size, diatonicColors.V.s);
 
     const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
     polygon.setAttribute("points", `${pT.x},${pT.y} ${pS.x},${pS.y} ${pD.x},${pD.y}`);
@@ -68,9 +73,9 @@ function drawTSDTriangle(size) {
     svgOverlay.appendChild(polygon);
 
     const pointsData = [
-        { id: "T", hue: tsdColors.T.h, s: tsdColors.T.s, p: pT },
-        { id: "S", hue: tsdColors.S.h, s: tsdColors.S.s, p: pS },
-        { id: "D", hue: tsdColors.D.h, s: tsdColors.D.s, p: pD }
+        { id: "T", hue: diatonicColors.I.h, s: diatonicColors.I.s, p: pT },
+        { id: "S", hue: diatonicColors.IV.h, s: diatonicColors.IV.s, p: pS },
+        { id: "D", hue: diatonicColors.V.h, s: diatonicColors.V.s, p: pD }
     ];
 
     pointsData.forEach(pt => {
@@ -105,7 +110,7 @@ function drawTSDTriangle(size) {
     svgOverlay.appendChild(currentChordDot);
 }
 
-let currentTargetHSL = { h: tsdColors.T.h, s: tsdColors.T.s, l: 100 };
+let currentTargetHSL = { h: 0, s: 0, l: 100 }; // 默认白色白光占位
 
 function getTrueRGB(h, s, l) {
     h /= 360; s /= 100; l /= 100;
@@ -127,25 +132,70 @@ function getTrueRGB(h, s, l) {
 }
 
 function applyChordColorByNumeral(romanNumeral) {
-    if (!romanNumeral || romanNumeral === "-") return;
+    if (!romanNumeral || romanNumeral === "-") return "-"; // 返回未知状态给 keyboard.js
     
-    const cleanNumeral = romanNumeral.replace(/b|#|m|maj|sus|dim|aug|[0-9]/g, "").toUpperCase();
-    let targetH = 0; let targetS = 100; let targetL = 100; 
+    // 【全新逻辑】：只提取基础级数（包含大小写，这非常重要！因为我们要区分大调的 I 和小调的 ii）
+    // 用正则提取最前面的罗马数字组：匹配连续的 I, V, X, i, v, x，忽略前缀 b/# 和后缀 maj7/m7/dim
+    const romanMatch = romanNumeral.match(/^[b#]*([IVXivx]+)/i);
+    
+    let targetH = 0; 
+    let targetS = 100; 
+    let targetL = 100; 
+    let functionGroup = "-"; // 用于返回给 UI 第二行大字显示
 
-    switch (cleanNumeral) {
-        case "I": case "VI": targetH = tsdColors.T.h; targetS = tsdColors.T.s; break;
-        case "II": case "IV": targetH = tsdColors.S.h; targetS = tsdColors.S.s; break;
-        case "III": case "V": targetH = tsdColors.D.h; targetS = tsdColors.D.s; break;
-        default: targetH = 0; targetS = 0; break; 
+    if (romanMatch) {
+        // 提取出来的纯罗马数字（忽略了可能存在的 b 或 #）
+        // 比如 bVIImaj7 会提取出 VII。我们将其转换为标准对照格式
+        let rootRoman = romanMatch[1].toUpperCase(); 
+
+        switch (rootRoman) {
+            case "I": 
+                targetH = diatonicColors.I.h; targetS = diatonicColors.I.s; 
+                functionGroup = "I";
+                break;
+            case "II": 
+                targetH = diatonicColors.ii.h; targetS = diatonicColors.ii.s; 
+                functionGroup = "ii"; // 小写
+                break;
+            case "III": 
+                targetH = diatonicColors.iii.h; targetS = diatonicColors.iii.s; 
+                functionGroup = "iii"; // 小写
+                break;
+            case "IV": 
+                targetH = diatonicColors.IV.h; targetS = diatonicColors.IV.s; 
+                functionGroup = "IV";
+                break;
+            case "V": 
+                targetH = diatonicColors.V.h; targetS = diatonicColors.V.s; 
+                functionGroup = "V";
+                break;
+            case "VI": 
+                targetH = diatonicColors.vi.h; targetS = diatonicColors.vi.s; 
+                functionGroup = "vi"; // 小写
+                break;
+            case "VII": 
+                targetH = diatonicColors.vii.h; targetS = diatonicColors.vii.s; 
+                functionGroup = "vii°"; // 你的绝妙设计：附加减度符号
+                break;
+            default: 
+                targetH = 0; targetS = 0; 
+                functionGroup = "-";
+                break; 
+        }
+    } else {
+        // 兜底：如果正则连罗马数字都没找到
+        targetH = 0; targetS = 0; 
+        functionGroup = "-";
     }
 
     currentTargetHSL = { h: targetH, s: targetS, l: targetL };
 
-    // 【核心修复：正确写入独立光源池 padLightSources[0]】
+    // 1. 注入光能引擎
     if (window.padLightSources && window.padLightSources[0]) {
         window.padLightSources[0].userHSL = { h: targetH, s: targetS, l: targetL };
     }
 
+    // 2. 渲染 UI 矩形色块
     const swatch = document.getElementById('color-swatch');
     if (swatch) {
         const trueColor = getTrueRGB(targetH, targetS, 60); 
@@ -153,7 +203,11 @@ function applyChordColorByNumeral(romanNumeral) {
         swatch.style.boxShadow = `0 0 15px ${trueColor}`;
     }
 
+    // 3. 移动色环准星
     updateChordDotPosition();
+
+    // 4. 返回处理好的功能级数名（如 "IV" 或 "vii°"），交给 keyboard.js 渲染到屏幕！
+    return functionGroup;
 }
 
 function updateChordDotPosition(forceSize) {

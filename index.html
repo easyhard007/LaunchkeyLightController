@@ -21,7 +21,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
     
     <!-- 3. 引入业务解耦模块 -->
-    <script src="chord_detection.js"></script>
 	<script src="scale_chord_engine.js"></script> 
 	<script src="modulation_engine.js"></script>
 	<script src="color_mapping.js"></script>
@@ -50,16 +49,16 @@
         </div>
 
         <div class="card" id="color-card">
-            <h3 style="color:#d500f9; margin-top:0;">🎨 全局灯光控制</h3>
             <div id="light-panel-wrapper">
                 <!-- 左侧调色盘 -->
                 <div id="color-picker-section">
                     <div id="color-picker-container"></div>
-					<div id="color-swatch" style="width: 24px; height: 160px; border-radius: 8px; border: 2px solid #444; background: #333; margin-left: 30px; transition: all 0.3s ease;"></div>
+					<div id="color-swatch" style="width: 24px; height: 160px;  background: #333; margin-left: 30px; transition: all 0.3s ease;"></div>
                 </div>
-                <!-- 右侧和弦与调性显示 -->
+				<!-- 右侧 40%：灯光和弦与调性监控 (三行结构) -->
                 <div id="light-info-section">
-                    <div id="light-chord-display">-</div>
+                    <div id="light-roman-display">-</div>
+                    <div id="light-function-display">VI</div> <!-- 占位符 -->
                     <div id="light-key-display">正在识别调性</div>
                 </div>
             </div>
@@ -110,7 +109,7 @@
                 <option value="">请求 MIDI 权限中...</option>
             </select>
             <br>
-            <button class="action-btn" onclick="startControl()">🟢 启动</button>
+            <button id="start-btn" class="action-btn" onclick="startControl()">🟢 启动</button>
             <button class="action-btn stop-btn" onclick="stopControl()">⏹ 停止</button>
             <div id="status">等待操作...</div>
         </div>
@@ -214,15 +213,57 @@
 
         function selectPort() { window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value); }
         
-        function startControl() {
-            if (!window.midiOutput) return alert("请先在上方选择 MIDI 端口！");
-            window.midiOutput.send([0x9F, 0x0C, 0x7F]); window.isRunning = true; updateFabState();
-            if (typeof forceSendCurrentColorToMidi === 'function') forceSendCurrentColorToMidi();
+		function startControl() {
+            const startBtn = document.getElementById('start-btn');
+            const statusEl = document.getElementById('status');
+
+            if (!window.midiOutput) {
+                statusEl.innerText = "❌ 启动失败：请先在上方选择 MIDI 端口！";
+                statusEl.style.color = "#ff5252";
+                return;
+            }
+            
+            // 尝试接管键盘
+            try {
+                window.midiOutput.send([0x9F, 0x0C, 0x7F]); 
+                window.isRunning = true; 
+                
+                // === 成功状态反馈 ===
+                updateFabState();
+                startBtn.classList.add('success'); // 按钮变紫
+                statusEl.innerText = "✅ 启动成功！已接管键盘灯光控制权"; 
+                statusEl.style.color = "#00e676";
+                
+                // 触发硬件级确认：双次白光闪烁！
+                if (typeof triggerHandshakeFlash === 'function') {
+                    triggerHandshakeFlash();
+                } else if (typeof forceSendCurrentColorToMidi === 'function') {
+                    forceSendCurrentColorToMidi(); // 兼容旧版
+                }
+                
+            } catch (err) {
+                // 如果发送 SysEx 报错
+                statusEl.innerText = "❌ 启动失败：MIDI 端口拒绝访问";
+                statusEl.style.color = "#ff5252";
+                console.error(err);
+            }
         }
-        
+
         function stopControl() {
-            window.isRunning = false; updateFabState();
-            if(window.midiOutput) window.midiOutput.send([0x9F, 0x0C, 0x00]);
+            const startBtn = document.getElementById('start-btn');
+            const statusEl = document.getElementById('status');
+
+            window.isRunning = false; 
+            updateFabState();
+            
+            if(window.midiOutput) {
+                window.midiOutput.send([0x9F, 0x0C, 0x00]);
+            }
+            
+            // 恢复 UI 到未启动状态
+            startBtn.classList.remove('success'); // 按钮变回灰色
+            statusEl.innerText = "已退回普通模式"; 
+            statusEl.style.color = "#aaa";
         }
     </script>
 </body>
