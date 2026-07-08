@@ -50,8 +50,17 @@ h2 { color: #00d2ff; margin-top: 10px; margin-bottom: 5px;}
 #light-info-section { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 10px; box-sizing: border-box; }
 /* 第一行：相对和弦级数 (小字) */
 #light-roman-display { font-size: 18px; color: #ccc; margin-bottom: 2px; font-weight: bold; font-family: serif;}
-/* 第二行：TSD 功能组 (巨大号衬线体) */
-#light-function-display { font-size: 48px; font-weight: bold; color: #fff; margin-bottom: 4px; font-family: serif; letter-spacing: 2px; }
+/* 第二行：TSD 功能组大字 (动态发光的基础) */
+#light-function-display { 
+    font-size: 48px; 
+    font-weight: bold; 
+    color: #fff; /* 默认白色，稍后会被 JS 覆盖 */
+    margin-bottom: 4px; 
+    font-family: serif; 
+    letter-spacing: 2px; 
+    /* 开启 GPU 加速，保证 60Hz 刷新发光时不掉帧 */
+    will-change: text-shadow, color; 
+}
 /* 第三行：调性 (小字) */
 #light-key-display { font-size: 14px; color: #888; font-weight: bold; }
 

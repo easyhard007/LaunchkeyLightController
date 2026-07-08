@@ -53,8 +53,7 @@
                 <!-- 左侧调色盘 -->
                 <div id="color-picker-section">
                     <div id="color-picker-container"></div>
-					<div id="color-swatch" style="width: 24px; height: 160px;  background: #333; margin-left: 30px; transition: all 0.3s ease;"></div>
-                </div>
+				</div>
 				<!-- 右侧 40%：灯光和弦与调性监控 (三行结构) -->
                 <div id="light-info-section">
                     <div id="light-roman-display">-</div>
@@ -130,6 +129,10 @@
 
         // 【新增】：设备 SysEx ID，默认 0x13 (Mini MK4)
         window.deviceSysExID = 0x13; 
+
+        // 【新增】：幽灵音频上下文与保活振荡器
+        let wakelockAudioCtx = null;
+        let wakelockOscillator = null;
 
         window.isPedalDown = false;          
         window.activeNotes = new Set();      
@@ -222,7 +225,7 @@
         }
 
         function selectPort() { window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value); }
-        
+
         function selectDeviceModel() {
             const select = document.getElementById('deviceModel');
             // 将 value (19 或 20) 转换为整数赋给全局变量
@@ -230,7 +233,7 @@
             console.log("当前选择设备的 SysEx ID:", window.deviceSysExID.toString(16).toUpperCase() + "h");
         }
 
-		function startControl() {
+		 function startControl() {
             const startBtn = document.getElementById('start-btn');
             const statusEl = document.getElementById('status');
 
@@ -240,29 +243,53 @@
                 return;
             }
             
-            // 尝试接管键盘
             try {
                 window.midiOutput.send([0x9F, 0x0C, 0x7F]); 
                 window.isRunning = true; 
                 
-                // === 成功状态反馈 ===
                 updateFabState();
-                startBtn.classList.add('success'); // 按钮变紫
+                startBtn.classList.add('success'); 
                 statusEl.innerText = "✅ 启动成功！已接管键盘灯光控制权"; 
                 statusEl.style.color = "#00e676";
                 
-                // 触发硬件级确认：双次白光闪烁！
                 if (typeof triggerHandshakeFlash === 'function') {
                     triggerHandshakeFlash();
                 } else if (typeof forceSendCurrentColorToMidi === 'function') {
-                    forceSendCurrentColorToMidi(); // 兼容旧版
+                    forceSendCurrentColorToMidi(); 
+                }
+
+                // ==========================================
+                // 【核心新增】：开启幽灵音频保活 (Audio Wakelock)
+                // ==========================================
+                try {
+                    if (!wakelockAudioCtx) {
+                        wakelockAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    // 如果处于挂起状态（某些浏览器对非手势触发的限制），唤醒它
+                    if (wakelockAudioCtx.state === 'suspended') {
+                        wakelockAudioCtx.resume();
+                    }
+                    
+                    // 创建一个振荡器
+                    wakelockOscillator = wakelockAudioCtx.createOscillator();
+                    const gainNode = wakelockAudioCtx.createGain();
+                    
+                    // 必须将音量设置为极其微弱的浮点数，或者直接为 0 (某些严格的系统设为0会失效，所以用 0.0001)
+                    gainNode.gain.value = 0.0001; 
+                    
+                    wakelockOscillator.connect(gainNode);
+                    gainNode.connect(wakelockAudioCtx.destination);
+                    
+                    // 开始在后台无限循环播放这极其微弱的蜂鸣音，从而欺骗系统保持线程活跃
+                    wakelockOscillator.start();
+                    console.log("幽灵音频保活已开启！");
+                } catch(e) {
+                    console.warn("音频保活开启失败", e);
                 }
                 
             } catch (err) {
-                // 如果发送 SysEx 报错
                 statusEl.innerText = "❌ 启动失败：MIDI 端口拒绝访问";
                 statusEl.style.color = "#ff5252";
-                console.error(err);
             }
         }
 
@@ -276,12 +303,26 @@
             if(window.midiOutput) {
                 window.midiOutput.send([0x9F, 0x0C, 0x00]);
             }
+
+            // ==========================================
+            // 【核心新增】：关闭幽灵音频
+            // ==========================================
+            if (wakelockOscillator) {
+                try {
+                    wakelockOscillator.stop();
+                    wakelockOscillator.disconnect();
+                    wakelockOscillator = null;
+                } catch(e) {}
+            }
+            if (wakelockAudioCtx && wakelockAudioCtx.state !== 'closed') {
+                wakelockAudioCtx.suspend();
+            }
             
-            // 恢复 UI 到未启动状态
-            startBtn.classList.remove('success'); // 按钮变回灰色
+            startBtn.classList.remove('success'); 
             statusEl.innerText = "已退回普通模式"; 
             statusEl.style.color = "#aaa";
         }
+
     </script>
     <!-- PWA 注册与强制刷新监听 -->
     <script>

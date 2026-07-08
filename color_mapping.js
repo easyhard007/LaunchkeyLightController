@@ -195,18 +195,10 @@ function applyChordColorByNumeral(romanNumeral) {
         window.padLightSources[0].userHSL = { h: targetH, s: targetS, l: targetL };
     }
 
-    // 2. 渲染 UI 矩形色块
-    const swatch = document.getElementById('color-swatch');
-    if (swatch) {
-        const trueColor = getTrueRGB(targetH, targetS, 60); 
-        swatch.style.backgroundColor = trueColor;
-        swatch.style.boxShadow = `0 0 15px ${trueColor}`;
-    }
-
-    // 3. 移动色环准星
+    // 2. 移动色环准星
     updateChordDotPosition();
 
-    // 4. 返回处理好的功能级数名（如 "IV" 或 "vii°"），交给 keyboard.js 渲染到屏幕！
+    // 3. 返回处理好的功能级数名（如 "IV" 或 "vii°"），交给 keyboard.js 渲染到屏幕！
     return functionGroup;
 }
 

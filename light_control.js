@@ -49,9 +49,8 @@ function hslToRgb(h, s, l) {
 function flushMidiDriver() {
     if (!window.isRunning || !window.midiOutput) return;
 
-    let sysExSentThisFrame = false;
-
-    for (let i = 0; i < 8; i++) { 
+    // 【核心修复 1】：管辖权恢复为 16 个 Pad，靠脏数据过滤拦截流量
+    for (let i = 0; i < 16; i++) { 
         let color = globalPadColors[i];
         let [r8, g8, b8] = hslToRgb(color.h, color.s, color.l);
         
@@ -60,12 +59,14 @@ function flushMidiDriver() {
         let b7 = Math.floor(b8 / 2);
 
         if (r7 !== lastSentColors[i].r || g7 !== lastSentColors[i].g || b7 !== lastSentColors[i].b) {
-            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, TOP_PADS[i], r7, g7, b7, 0xF7]);
+            // 动态判断是上排还是下排
+            let padID = i < 8 ? TOP_PADS[i] : BOTTOM_PADS[i - 8];
+            
+            // 注意这里使用的是 window.deviceSysExID
+            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, padID, r7, g7, b7, 0xF7]);
             lastSentColors[i] = { r: r7, g: g7, b: b7 };
-            sysExSentThisFrame = true;
         }
     }
-    
 }
 
 function interpolateHSL(source, target, progress) {
@@ -207,35 +208,75 @@ function engineLoop(currentTime) {
         }
     }
 
+    // 同步 UI 罗马大字发光效果 (Neon Tube 霓虹灯模式)
+    // ==========================================
+    const functionDisplay = document.getElementById('light-function-display');
+    if (functionDisplay && window.isRunning) {
+        let h = globalPadColors[0].h;
+        let s = globalPadColors[0].s;
+        let l = globalPadColors[0].l; // 范围 0~60
+
+        // 文字本体永远保持纯白，保证绝对清晰
+        functionDisplay.style.color = "#ffffff";
+
+        if (l > 2) {
+            // 将 0~60 的亮度映射成更强烈的发光透明度
+            // 我们稍微提升光晕的明度（比如固定在 50% 这个色彩最纯正的值），用 alpha 通道来控制光晕强度
+            let alpha = Math.min(1.0, l / 40.0); // 亮度达到 40 时，光晕就满血
+            let glowColor = `hsla(${h}, ${s}%, 50%, ${alpha})`;
+            
+            // 使用三重阴影，最内层紧贴文字，外层扩散
+            functionDisplay.style.textShadow = `
+                0 0 8px ${glowColor},
+                0 0 16px ${glowColor},
+                0 0 30px ${glowColor}
+            `;
+        } else {
+            // 待机状态：彻底消除光晕
+            functionDisplay.style.textShadow = "none";
+        }
+    } else if (functionDisplay && !window.isRunning) {
+        functionDisplay.style.color = "#ffffff";
+        functionDisplay.style.textShadow = "none";
+    }
+
+
     requestAnimationFrame(engineLoop);
 }
 
 // === 【新增】：硬件握手确认（两次纯白闪烁） ===
+// === 硬件握手确认（两次纯白闪烁） ===
 function triggerHandshakeFlash() {
     if (!window.midiOutput) return;
 
-    // 辅助函数：立刻把 16 个 Pad 全设为某个 RGB 颜色
     const flashAll = (r, g, b) => {
         for (let i = 0; i < 16; i++) {
             let padID = i < 8 ? TOP_PADS[i] : BOTTOM_PADS[i - 8];
-             window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, padID, r, g, b, 0xF7]);
+            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, padID, r, g, b, 0xF7]);
         }
     };
 
-    // 白光全亮 (127 为 7-bit 最高亮度)
     flashAll(127, 127, 127);
 
     setTimeout(() => {
-        flashAll(0, 0, 0); // 全灭
+        flashAll(0, 0, 0); 
         
         setTimeout(() => {
-            flashAll(127, 127, 127); // 再次白光全亮
+            flashAll(127, 127, 127); 
             
             setTimeout(() => {
-                flashAll(0, 0, 0); // 再次全灭
+                flashAll(0, 0, 0); 
                 
-                // 闪烁完毕后，强制把当前的调色盘静默颜色刷回给硬件，恢复正常引擎控制
-                forceSendCurrentColorToMidi();
+                // 【核心修复 2】：强行格式化脏数据缓存！
+                // 这会迫使下一帧的 engineLoop 重新把所有的 0,0,0 发给键盘，
+                // 直接碾压掉 Launchkey 49 自带的录音红灯默认值！
+                for(let i = 0; i < 16; i++) {
+                    lastSentColors[i] = { r: -1, g: -1, b: -1 };
+                }
+
+                if (typeof forceSendCurrentColorToMidi === 'function') {
+                    forceSendCurrentColorToMidi();
+                }
                 
             }, 100);
         }, 100);
