@@ -100,11 +100,18 @@
     </div>
 
     <!-- 设置页面 -->
-    <div id="settings-page">
+   <div id="settings-page">
         <button id="back-btn" onclick="closeSettings()">⬅ 返回</button>
         <h2 style="color: #d500f9;">⚙️ 设置</h2>
         <div class="card" style="margin-top: 30px;">
-            <p style="color:white; font-size: 14px; margin-bottom: 20px;">请选择 DAW 端口并点击启动</p>
+            <p style="color:white; font-size: 14px; margin-bottom: 20px;">请选择设备型号和 MIDI 端口</p>
+            
+            <!-- 【新增】：设备型号选择 -->
+            <select id="deviceModel" onchange="selectDeviceModel()">
+                <option value="19" selected>Launchkey 25/37 Mini MK4</option>
+                <option value="20">Launchkey 25/37/49/61 MK4 (全尺寸)</option>
+            </select>
+
             <select id="midiPorts" onchange="selectPort()">
                 <option value="">请求 MIDI 权限中...</option>
             </select>
@@ -120,6 +127,9 @@
         window.midiAccess = null; 
         window.midiOutput = null; 
         window.isRunning = false;
+
+        // 【新增】：设备 SysEx ID，默认 0x13 (Mini MK4)
+        window.deviceSysExID = 0x13; 
 
         window.isPedalDown = false;          
         window.activeNotes = new Set();      
@@ -213,6 +223,13 @@
 
         function selectPort() { window.midiOutput = window.midiAccess.outputs.get(document.getElementById('midiPorts').value); }
         
+        function selectDeviceModel() {
+            const select = document.getElementById('deviceModel');
+            // 将 value (19 或 20) 转换为整数赋给全局变量
+            window.deviceSysExID = parseInt(select.value);
+            console.log("当前选择设备的 SysEx ID:", window.deviceSysExID.toString(16).toUpperCase() + "h");
+        }
+
 		function startControl() {
             const startBtn = document.getElementById('start-btn');
             const statusEl = document.getElementById('status');

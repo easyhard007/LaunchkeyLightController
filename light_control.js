@@ -60,7 +60,7 @@ function flushMidiDriver() {
         let b7 = Math.floor(b8 / 2);
 
         if (r7 !== lastSentColors[i].r || g7 !== lastSentColors[i].g || b7 !== lastSentColors[i].b) {
-            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, TOP_PADS[i], r7, g7, b7, 0xF7]);
+            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, TOP_PADS[i], r7, g7, b7, 0xF7]);
             lastSentColors[i] = { r: r7, g: g7, b: b7 };
             sysExSentThisFrame = true;
         }
@@ -218,7 +218,7 @@ function triggerHandshakeFlash() {
     const flashAll = (r, g, b) => {
         for (let i = 0; i < 16; i++) {
             let padID = i < 8 ? TOP_PADS[i] : BOTTOM_PADS[i - 8];
-            window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, 0x13, 0x01, 0x43, padID, r, g, b, 0xF7]);
+             window.midiOutput.send([0xF0, 0x00, 0x20, 0x29, 0x02, window.deviceSysExID, 0x01, 0x43, padID, r, g, b, 0xF7]);
         }
     };
 
