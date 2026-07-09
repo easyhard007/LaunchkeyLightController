@@ -9,6 +9,7 @@ const urlsToCache = [
   './index.html',
   './style.css',
   './keyboard.js',
+  './background_animation.js',
   './scale_chord_engine.js',
   './modulation_engine.js',
   './color_mapping.js',
@@ -16,8 +17,10 @@ const urlsToCache = [
   './light_control.js',
   './manifest.json',
   './icon.png',
-  'https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js',
-  'https://cdn.jsdelivr.net/npm/@jaames/iro@5'
+
+  './vendor/three.min.js',
+  './vendor/tonal.min.js',
+  './vendor/iro.min.js'
 ];
 
 // 安装阶段：缓存所有文件，并强制跳过等待期

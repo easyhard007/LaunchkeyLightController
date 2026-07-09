@@ -17,18 +17,23 @@
     <link rel="stylesheet" href="style.css">
 
     <!-- 2. 引入第三方库 -->
-    <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/tonal.min.js"></script>
+    <script src="vendor/iro.min.js"></script>
+
     
     <!-- 3. 引入业务解耦模块 -->
 	<script src="scale_chord_engine.js"></script> 
 	<script src="modulation_engine.js"></script>
 	<script src="color_mapping.js"></script>
 	<script src="virtual_piano_engine.js"></script>
+    <script src="background_animation.js"></script>
     <script src="light_control.js"></script>
     <script src="keyboard.js"></script>
 </head>
 <body>
+
+    <div id="glcanvas" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none;"></div>
 
     <div id="main-page">
         <h2>Launchkey Mini 37 灯光工作站</h2>
@@ -102,7 +107,7 @@
    <div id="settings-page">
         <button id="back-btn" onclick="closeSettings()">⬅ 返回</button>
         <h2 style="color: #d500f9;">⚙️ 设置</h2>
-        <div class="card" style="margin-top: 30px;">
+        <div class="card" id="settings-card" style="margin-top: 30px;">
             <p style="color:white; font-size: 14px; margin-bottom: 20px;">请选择设备型号和 MIDI 端口</p>
             
             <!-- 【新增】：设备型号选择 -->

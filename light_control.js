@@ -106,6 +106,8 @@ function applyWaveEffect() {
 }
 
 function initColorPicker() {
+    if (typeof initBackground === 'function') initBackground();
+    
     colorPicker = new iro.ColorPicker("#color-picker-container", {
         width: 180, color: "#aa00ff", layout: [ { component: iro.ui.Wheel } ]
     });
@@ -153,6 +155,15 @@ function engineLoop(currentTime) {
     }
     if (smoothedVolume < 0.005) smoothedVolume = 0.0;
 
+
+    // 通知背景引擎进行状态更新 (音量, 颜色)
+    if (typeof updateBackgroundState === 'function') {
+        let currentH = window.padLightSources[0].userHSL.h;
+        let currentS = window.padLightSources[0].userHSL.s;
+        let currentL = window.padLightSources[0].userHSL.l;
+        updateBackgroundState(smoothedVolume, currentH, currentS, currentL);
+    }
+
     // ================== 探针 3：包络写入 ==================
     let sourcePad = window.padLightSources[0];
     let compressedVolume = Math.pow(smoothedVolume, 0.4);
@@ -161,6 +172,8 @@ function engineLoop(currentTime) {
     const MAX_LIGHTNESS = 60;
     let currentL = IDLE_LIGHTNESS + (MAX_LIGHTNESS - IDLE_LIGHTNESS) * sourcePad.envelope;
     let currentS = sourcePad.userHSL.s * sourcePad.envelope;
+
+    
     
 	// 正弦波颜色抖动 
     let timeInSeconds = currentTime / 1000.0;
