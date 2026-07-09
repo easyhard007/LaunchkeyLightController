@@ -46,7 +46,7 @@
 
             <!-- 和弦监控区 -->
             <div id="pressed-notes">
-                <div style="height:100%; display:flex; justify-content:center; align-items:center; color:#666; font-size:16px;">等待弹奏...</div>
+                <div style="height:100%; display:flex; justify-content:center; align-items:center; color:#666; font-size:16px;"></div>
             </div>
             
             <!-- 钢琴键盘 -->
@@ -82,7 +82,7 @@
                     </tr>
                 </thead>
                 <tbody id="debug-tbody">
-                    <tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>
+                    <tr><td colspan="5" style="color:#666;"></td></tr>
                 </tbody>
             </table>
         </div>
@@ -98,7 +98,7 @@
                     <tr><th>排名</th><th>分析调性</th><th>置信度得分</th></tr>
                 </thead>
                 <tbody id="scale-debug-tbody">
-                    <tr><td colspan="3" style="color:#666;">等待弹奏...</td></tr>
+                    <tr><td colspan="3" style="color:#666;"></td></tr>
                 </tbody>
             </table>
         </div>
@@ -200,6 +200,13 @@
         }
 
         window.onload = () => {
+            // 强制锁定手机竖屏 (Portrait)
+            if (screen.orientation && screen.orientation.lock) {
+                // 捕获 Promise 错误，因为在非全屏/非 HTTPS/部分桌面端可能会被拒绝，忽略即可
+                screen.orientation.lock("portrait").catch(function(error) {
+                    console.log("屏幕方向锁定被系统拒绝或不支持: ", error);
+                });
+            }
             // 初始化其他文件的组件
             if (typeof initPadMatrixDOM === 'function') initPadMatrixDOM(); 
             if (typeof initKeyboardDOM === 'function') initKeyboardDOM(); 

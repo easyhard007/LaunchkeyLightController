@@ -184,15 +184,15 @@ function refreshKeyboardUI() {
                 scHtml += `<tr style="${rowStyle}"><td>${idx+1}</td><td>${s.majorName}大调 / ${s.minorName}小调</td><td style="color: #ffeb3b;">${s.score.toFixed(3)}</td></tr>`;
             });
         } else {
-            scHtml = `<tr><td colspan="3" style="color:#666;">等待弹奏...</td></tr>`;
+            scHtml = `<tr><td colspan="3" style="color:#666;"></td></tr>`;
         }
         document.getElementById('scale-debug-tbody').innerHTML = scHtml;
     }
 
     // 3. 和弦 UI 渲染 (空状态处理)
     if (notesArr.length === 0) {
-		textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;">等待弹奏...</div>`;
-        debugTbody.innerHTML = `<tr><td colspan="5" style="color:#666;">等待弹奏...</td></tr>`;
+		textDiv.innerHTML = `<div style="height: 100%; display: flex; justify-content: center; align-items: center; color: #666; font-size: 16px;"></div>`;
+        debugTbody.innerHTML = `<tr><td colspan="5" style="color:#666;"></td></tr>`;
         
         if (typeof detectScaleSmart === 'function') keyDisplay.innerText = detectScaleSmart([]);
         romanDisplay.innerText = "-";
@@ -288,7 +288,7 @@ function refreshKeyboardUI() {
             // 【核心修改】：失败回退时（比如单音），什么都不显示，保持 60/40 的空壳结构
             textDiv.innerHTML = `
                 <div style="height: 60%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;">
-                    <span style="color:#666; font-size:16px;">等待和弦...</span>
+                    <span style="color:#666; font-size:16px;"></span>
                 </div>
                 <div style="height: 40%;"></div>
             `;

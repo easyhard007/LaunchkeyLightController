@@ -71,7 +71,7 @@ h2 {
     
     /* 你精调的完美边距保留 */
     padding: 0px 10px 2px 8px;
-    border-radius: 10px;
+    border-radius: 5px;
     
     /* 手机端由于字号变小，Y轴偏移可能需要微调，用 em 单位最稳 */
     transform: translateY(0.08em); 

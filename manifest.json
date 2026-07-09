@@ -1,11 +1,12 @@
 {
-  "name": "Launchkey Mini 37 Light Station",
+  "name": "Launchkey Light Station MK4",
   "short_name": "LaunchkeyRGB",
-  "description": "Launchkey Mini 37 灯光工作站",
+  "description": "Launchkey Light Station MK4",
   "start_url": "./index.html",
   "display": "fullscreen",
   "background_color": "#121212",
   "theme_color": "#121212",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "icon.png",
