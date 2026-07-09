@@ -8,221 +8,220 @@
 /* === 基础与全面屏安全区设定 === */
 html, body { 
     background-color: #050505; 
-    margin: 0; padding: 0; min-height: 100dvh; 
-    /* 核心防爆边 1：强制屏幕禁止横向滚动和溢出！ */
-    width: 100vw; max-width: 100vw; overflow-x: hidden; 
-    color: #fff; text-align: center; overflow-y: hidden; 
+    margin: 0; padding: 0; width: 100vw; max-width: 100vw; 
+    height: 100dvh; max-height: 100dvh; 
+    color: #fff; text-align: center; overflow: hidden; 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body { 
+    padding-top: max(10px, env(safe-area-inset-top)); 
+    padding-bottom: max(10px, env(safe-area-inset-bottom)); 
+    padding-left: max(10px, env(safe-area-inset-left)); 
+    padding-right: max(10px, env(safe-area-inset-right)); 
     box-sizing: border-box; display: flex; flex-direction: column; 
 }
 
 #main-page {
-    flex: 1; overflow-y: auto; width: 100%; padding-bottom: 80px; scrollbar-width: none; 
+    flex: 1; display: flex; flex-direction: column; width: 100%; 
+    padding-bottom: 60px; 
+    overflow-y: auto; overflow-x: hidden; scrollbar-width: none; 
 }
 #main-page::-webkit-scrollbar { display: none; }
 
-/* ==========================================
-   顶级工业风标题排版 (带智能单行收缩)
-   ========================================== */
 h2 {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-    
-    /* 核心修复 1：使用 clamp() 动态字号。
-       在手机上最小缩小到 1.3rem，在电脑上最大放大到 2.2rem，
-       中间随屏幕宽度 (5vw) 无缝平滑缩放！ */
     font-size: clamp(1.3rem, 5vw, 2.2rem); 
-    
-    font-style: normal;
-    font-weight: 700;
-    line-height: 1.2;
-    flex-shrink: 0;
-    position: relative;
-    z-index: 2;
-    
-    /* 核心修复 2：恢复 flex 布局，但不允许换行 (nowrap) */
-    display: flex;
-    flex-wrap: nowrap; /* 绝对禁止换行 */
-    justify-content: center;
-    align-items: center;
-    
-    /* 核心修复 3：间距也随屏幕动态缩小 */
-    gap: clamp(6px, 2vw, 14px); 
-    
-    color: #D4D7DF;
-    
-    /* 增加一点外边距，防止手机顶部太挤 */
-    margin-top: 15px; 
-    margin-bottom: 5px;
-    
-    /* 核心修复 4：如果屏幕实在太极端窄，强行压缩字间距 */
-    white-space: nowrap; 
+    font-weight: 700; line-height: 1.2; flex-shrink: 0;
+    display: flex; flex-wrap: nowrap; justify-content: center; align-items: center;
+    gap: clamp(6px, 2vw, 14px); color: #D4D7DF;
+    margin-top: 10px; margin-bottom: 5px; white-space: nowrap; z-index: 2; position: relative;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+.mk4-badge {
+    background-color: #A855F7; color: #ffffff; font-size: 0.75em; 
+    padding: 0px 10px 2px 8px; border-radius: 10px; transform: translateY(0.08em);
 }
 
-/* 专属的 MK4 紫色胶囊徽章 */
-.mk4-badge {
-    background-color: #A855F7;
-    color: #ffffff;
-    
-    /* 徽章字号也必须动态缩放，基于主标题字号的一个比例，比如 70% */
-    font-size: 0.75em; 
-    
-    /* 你精调的完美边距保留 */
-    padding: 0px 10px 2px 8px;
-    border-radius: 5px;
-    
-    /* 手机端由于字号变小，Y轴偏移可能需要微调，用 em 单位最稳 */
-    transform: translateY(0.08em); 
-}
 /* ==========================================
-   【核心修复】：防爆边 + 物理拟真毛玻璃
+   【核心卡片容器】
    ========================================== */
 .card { 
-    margin: 15px auto; 
-    
-    /* 核心防爆边 2：使用 calc() 严格限制最大宽度，绝对留出左右间隙防反光 */
-    width: calc(100% - 30px); 
-    max-width: 900px; 
-    
-    padding: 20px; 
-    border-radius: 20px; 
-    flex-shrink: 0;
-    position: relative; 
-    z-index: 2;
-    
-    /* 核心防爆边 3：强制把 padding 和 border 算进宽度里，绝不外扩！ */
-    box-sizing: border-box;
-    
+    margin: 8px auto; 
+    width: calc(100% - 20px); max-width: 900px; 
+    padding: 2vmin; 
+    /* 将圆角改为 CSS 变量，默认 20px，方便 JS 动态修改 */
+    border-radius: var(--card-radius, 20px); 
+    box-sizing: border-box; position: relative; z-index: 2;
     background: rgba(230, 230, 240, 0.06); 
     backdrop-filter: blur(20px) brightness(95%) saturate(95%); 
     -webkit-backdrop-filter: blur(20px) brightness(95%) saturate(95%);
-    
-    border: 1px solid rgba(255, 255, 255, 0.1); 
-    border-top: 1px solid rgba(255, 255, 255, 0.15); 
-    border-left: 1px solid rgba(255, 255, 255, 0.12); 
-    
-    box-shadow: 
-        0 20px 60px 10px rgba(0, 0, 0, 0.5),  
-        0 10px 20px 0px rgba(0, 0, 0, 0.05),  
-        inset 0 0 20px rgba(0, 0, 0, 0.15);   
-    
-    color: #fff; 
+    border: 1px solid rgba(255, 255, 255, 0.1); border-top: 1px solid rgba(255, 255, 255, 0.15); border-left: 1px solid rgba(255, 255, 255, 0.12); 
+    box-shadow: 0 20px 60px 10px rgba(0, 0, 0, 0.5), 0 10px 20px 0px rgba(0, 0, 0, 0.05), inset 0 0 20px rgba(0, 0, 0, 0.15);   
 }
 
 /* ==========================================
-   【修复 #light-panel-wrapper 内部布局溢出】
+   【核心修复】：为多层嵌套的 Flex 容器注入钢筋骨架
    ========================================== */
-#light-panel-wrapper { 
-    display: flex; 
+
+#piano-card {
+    /* 不仅要占 6 份，还要给一个最小高度保底，防止内部压缩 */
+    flex: 6; 
+    min-height: 45vh; /* 强制钢琴卡片至少占据屏幕的 45% 高度 */
+    display: flex; flex-direction: column; 
+}
+
+/* === 1. 物理虚拟 Pad 矩阵 === */
+/* === 1. 物理虚拟 Pad 矩阵 (绝对防塌缩版) === */
+#pad-matrix { 
+    display: grid; 
+    grid-template-columns: repeat(8, 1fr); 
+    /* 去掉不稳定的 rows 设定，让它靠内部元素自然撑开 */
+    gap: var(--pad-gap); 
+    margin-bottom: 2vmin; 
+    flex-shrink: 0; 
+    max-width: 900px; 
+    margin-left: auto; 
+    margin-right: auto; 
+    width: 100%;
+}
+
+.v-pad { 
+    background-color: rgba(99, 99, 99, 0.8); 
+    
+    /* 核心修复 1：废弃会引发塌缩的 aspect-ratio */
+    /* 核心修复 2：利用 padding-top 100% 强行撑出一个完美的正方形！ */
+    width: 100%;
+    padding-top: 100%; 
+    height: 0; /* 高度设为 0，全靠 padding 撑起物理空间 */
+    
+    border-radius: calc(var(--pad-gap) * 0.2); 
+    box-shadow: inset 0 0 8px #2a2a2a; 
+    position: relative; 
+    overflow: hidden; 
+}
+
+/* 因为 .v-pad 里面现在靠 padding 撑开，所以里面的光晕必须要用 absolute 绝对定位铺满 */
+.v-pad-light { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
     width: 100%; 
-    align-items: stretch; 
-    margin-top: 10px; 
-    margin-bottom: 20px; 
-    /* 移除掉你之前加的强制左右 30px margin，这在移动端必爆屏幕！ */
-    /* 我们已经给 card 加上了严密的内边距(padding)和安全宽度，内部子元素老老实实继承 100% 即可 */
-    box-sizing: border-box;
+    height: 100%; 
+    mix-blend-mode: screen; 
+    mix-blend-mode: plus-lighter; 
+    pointer-events: none; 
+    z-index: 1; 
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6); 
 }
 
-#color-picker-section { 
-    width: 60%; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    border-right: 1px solid rgba(255,255,255,0.1); 
-    box-sizing: border-box; /* 防止边框把 60% 撑破 */
+
+/* === 2. 钢琴与和弦的 1:1 等分包裹器 === */
+#piano-lower-half {
+    display: flex; flex-direction: column; 
+    flex: 1; 
+    min-height: 200px; /* 核心修复：必须给包裹器一个最小绝对高度 */
 }
 
-#color-picker-container { display: flex; gap: 15px; }
-
-/* 右侧和弦调性面板 */
-#light-info-section { 
-    width: 40%; 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; 
-    align-items: center; 
-    padding: 0 10px; 
-    box-sizing: border-box; /* 防止 padding 撑破 40% */
+#pressed-notes { 
+    background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 2vmin; 
+    flex: 1; /* 占据包裹器 50% */
+    min-height: 60px; /* 核心修复：防止和弦框被压没 */
+    width: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; 
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); 
 }
-/* 其他代码保持不变... */
+.chord-primary-text { font-size: clamp(24px, 6vh, 48px); font-weight: bold; color: #fff; }
+.chord-secondary-text { font-size: clamp(12px, 3vh, 20px); color: #ccc; font-weight: bold; }
 
-/* === 极光画布放置在最底层 === */
-canvas#glcanvas { display: block; width: 100%; height: 100%; position: fixed; top: 0; left: 0; z-index: 0; pointer-events: none; }
-
-/* === 物理虚拟 Pad 矩阵 === */
-#pad-matrix { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(2, 1fr); gap: var(--pad-gap); margin-bottom: 20px; }
-.v-pad { background-color: rgba(99, 99, 99, 0.8); aspect-ratio: 1 / 1; border-radius: calc(var(--pad-gap) * 0.2); box-shadow: inset 0 0 8px #2a2a2a; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; }
-.v-pad-light { position: absolute; top: 0; left: 0; width: 100%; height: 100%; mix-blend-mode: screen; mix-blend-mode: plus-lighter; pointer-events: none; z-index: 1; box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6); }
-
-/* === 钢琴监控 UI === */
-#pressed-notes { background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 15px; height: 86px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); }
-#keyboard-wrapper { width: 100%; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+/* === 3. 钢琴键盘区 === */
+#keyboard-wrapper { 
+    flex: 1; /* 占据包裹器另外 50% */
+    min-height: 80px; /* 核心修复：防止键盘被压没 */
+    width: 100%; overflow-x: auto; scrollbar-width: none; 
+    display: flex; align-items: flex-end; 
+}
 #keyboard-wrapper::-webkit-scrollbar { display: none; } 
-#keyboard { display: flex; width: max-content; user-select: none; }
-
+#keyboard { display: flex; width: max-content; user-select: none; height: 100%; }
 .key { position: relative; box-sizing: border-box; }
-.white-key { width: var(--wk-width); min-width: var(--wk-width); height: 140px; background: rgba(240, 240, 240, 0.9); border: 1px solid rgba(0,0,0,0.2); border-radius: 0 0 6px 6px; z-index: 1; backdrop-filter: blur(5px); }
-.black-key { width: var(--bk-width); min-width: var(--bk-width); height: 85px; background: rgba(20, 20, 20, 0.95); border-radius: 0 0 4px 4px; margin-left: var(--bk-margin); margin-right: var(--bk-margin); z-index: 2; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
 
-.active-red.white-key { background: #d0d0d0; border-bottom: 4px solid #888; }
-.active-red.black-key { background: #000; }
-.dot { position: absolute; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 50%; display: none; bottom: 15px; z-index: 4; }
-.black-key .dot { bottom: 8px; }
-.active-red .dot { display: block; background: #ff2a2a; box-shadow: 0 0 8px #ff2a2a; }
-.key:not(.active-red).active-pink .dot { display: block; background: #ff80ab; box-shadow: 0 0 8px #ff80ab; }
+.white-key { width: var(--wk-width); min-width: var(--wk-width); height: 100%; background: rgba(240, 240, 240, 0.9); border: 1px solid rgba(0,0,0,0.2); border-radius: 0 0 6px 6px; z-index: 1; backdrop-filter: blur(5px); }
+.black-key { width: var(--bk-width); min-width: var(--bk-width); height: 60%; background: rgba(20, 20, 20, 0.95); border-radius: 0 0 4px 4px; margin-left: var(--bk-margin); margin-right: var(--bk-margin); z-index: 2; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
 
-/* === 全局灯光控制面板 (60/40 布局) === */
-#light-panel-wrapper { display: flex; width: 100%; align-items: stretch; margin-top: 10px; margin-bottom:20px; }
-#color-picker-section { width: 60%; display: flex; justify-content: center; align-items: center; border-right: 1px solid rgba(255,255,255,0.1); }
-#color-picker-container { display: flex; gap: 15px; }
+/* ... (省略中间的点点样式，保持不变) ... */
 
-/* 右侧和弦调性面板 */
-#light-info-section { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 10px; box-sizing: border-box; }
-#light-roman-display { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 2px; font-weight: bold; font-family: serif;}
-#light-function-display { font-size: 48px; font-weight: bold; color: #fff; margin-bottom: 4px; font-family: serif; letter-spacing: 2px; will-change: text-shadow, color; }
-#light-key-display { font-size: 14px; color: rgba(255,255,255,0.5); font-weight: bold; }
+/* === 4. 全局灯光控制面板 === */
+#color-card {
+    flex: 3;
+    min-height: 25vh; /* 核心修复：强制调色盘卡片至少占 25% 屏幕高度 */
+    display: flex; flex-direction: column; justify-content: space-around;
+}
+#color-card h3 { font-size: clamp(14px, 3vmin, 18px); margin: 0; flex-shrink: 0; }
 
-/* === FAB 与 设置页 === */
-#fab-btn { position: fixed; bottom: max(30px, env(safe-area-inset-bottom)); left: max(30px, env(safe-area-inset-left)); width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.5); color: #fff; font-size: 20px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 900; transition: all 0.3s; }
+#light-panel-wrapper { display: flex; width: 100%; align-items: center; flex: 1; min-height: 120px; /* 给包裹器骨架 */ }
+#color-picker-section { width: 60%; display: flex; justify-content: center; align-items: center; border-right: 1px solid rgba(255,255,255,0.1); height: 100%; box-sizing: border-box; padding: 2vmin; overflow: hidden;}
+#color-picker-container { display: flex; width: 100%; height: 100%; justify-content: center; align-items: center; }
+
+/* 核心修复 4：取消高度 100% 的死板限制，让 iro.js 自由计算 */
+.IroWheel { max-height: 200px !important; max-width: 100% !important; aspect-ratio: 1/1; }
+
+#light-info-section { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 2vmin; box-sizing: border-box; }
+#light-roman-display { font-size: clamp(12px, 2.5vh, 20px); color: rgba(255,255,255,0.7); margin-bottom: 2px; font-weight: bold; font-family: serif;}
+#light-function-display { font-size: clamp(24px, 8vh, 64px); font-weight: bold; color: #fff; margin-bottom: 4px; font-family: serif; letter-spacing: 2px; will-change: text-shadow, color; line-height: 1; }
+#light-key-display { font-size: clamp(10px, 2vh, 16px); color: rgba(255,255,255,0.5); font-weight: bold; }
+
+#fab-btn { position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: max(20px, env(safe-area-inset-left)); width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.5); color: #fff; font-size: 20px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 900; transition: all 0.3s; }
 #fab-btn.success { color: #00e676; border-color: rgba(0, 230, 118, 0.4); }
 
 #settings-page { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background-color: rgba(5,5,5,0.85); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); z-index: 1000; display: none; flex-direction: column; align-items: center; padding-top: max(60px, env(safe-area-inset-top)); box-sizing: border-box; }
 #settings-page.show { display: flex; }
 #back-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left)); background: rgba(255,255,255,0.1); color: #fff; font-size: 16px; padding: 10px 15px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; backdrop-filter: blur(10px); }
-
-select { padding: 12px; border-radius: 8px; width: 100%; max-width: 320px; margin-bottom: 20px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); font-size: 16px; backdrop-filter: blur(10px); outline: none; }
-.action-btn { padding: 15px 20px; font-size: 16px; font-weight: bold; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; margin: 10px 5px; width: 140px; transition: all 0.3s ease; backdrop-filter: blur(10px); }
+select { padding: 12px; border-radius: 8px; width: 100%; max-width: 320px; margin-bottom: 20px; background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); font-size: 16px; outline: none; }
+.action-btn { padding: 15px 20px; font-size: 16px; font-weight: bold; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; margin: 10px 5px; width: 140px; transition: all 0.3s ease; }
 .action-btn.success { background: rgba(170, 0, 255, 0.6); border-color: rgba(170, 0, 255, 0.8); text-shadow: 0 0 10px rgba(255,255,255,0.5); } 
 .stop-btn { background: rgba(0,0,0,0.5); }
 #status { margin-top: 15px; color: #aaa; font-size: 14px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-
-/* 调试表格 CSS */
-#debug-panel-chord { text-align: left; }
-#debug-panel-scale { text-align: left; }
-.card h3 { color: rgba(255,255,255,0.9); margin-top: 0; font-size: 16px; font-weight: 500; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-table { width: 100%; border-collapse: collapse; color: #fff; font-size: 14px; display: block; }
-thead { display: table; width: 100%; table-layout: fixed; }
-tbody#debug-tbody, tbody#scale-debug-tbody { display: block; width: 100%; max-height: 120px; overflow-y: auto; scrollbar-width: none; }
-tbody#debug-tbody::-webkit-scrollbar, tbody#scale-debug-tbody::-webkit-scrollbar { display: none; }
-tbody#debug-tbody tr, tbody#scale-debug-tbody tr { display: table; width: 100%; table-layout: fixed; }
-th, td { padding: 8px 5px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; }
-th { color: #00d2ff; font-weight: 600; }
-tr.top-score { background-color: rgba(0, 230, 118, 0.15); font-weight: bold; }
-
-@keyframes flash-bg {
-    0%   { background-color: rgba(255, 235, 59, 0.4); } 
-    10%  { background-color: rgba(255, 235, 59, 0.4); }
-    100% { background-color: transparent; } 
-}
-.flash-highlight-bg { animation: flash-bg 0.6s ease-out; }
-
-@keyframes flash-text {
-    0%   { color: #ffeb3b; transform: scale(1.1); text-shadow: 0 0 15px #ffeb3b; }
-    10%  { color: #ffeb3b; transform: scale(1.1); text-shadow: 0 0 15px #ffeb3b; }
-    100% { color: #fff; transform: scale(1); text-shadow: none; }
-}
-.flash-highlight-text { animation: flash-text 0.6s ease-out; display: inline-block; }
-
 .IroHandle { display: none !important; }
+
+/* ==========================================
+   【核心修复 3】：响应式布局 (高度极小/横屏防重叠保护)
+   当屏幕高度极其扁平 (< 800px) 时，压缩卡片宽度和间距，防止纵向溢出
+   ========================================== */
+@media (max-height: 880px) {
+    .card {
+        padding: 10px;
+        margin: 5px auto;
+        /* 在极扁屏幕下，卡片变窄，腾出更多呼吸空间 */
+        width: 80%;
+        max-width: 700px;
+    }
+    
+    #pad-matrix { margin-bottom: 10px; max-width: 400px;}
+    #pressed-notes { margin-bottom: 10px; }
+    h2 { margin-top: 5px; font-size: clamp(1rem, 4vw, 1.8rem); }
+}
+
+@media (max-height: 600px) {
+    /* 极端扁平 (横屏手机)：进一步压缩键盘最低限度，防止和色环打架 */
+    .white-key { height: 60px; }
+    .black-key { height: 35px; }
+    .card { width: 70%; padding: 5px; }
+}
+
+/* ==========================================
+   【核心修复】：极窄屏幕 (宽高比小于 3:4) 字体微调
+   ========================================== */
+@media (max-aspect-ratio: 3/4) {
+    /* 1. TSD 功能级数罗马数字 (调小 2 号，比如从 8vh 降到 6vh) */
+    #light-function-display {
+        font-size: clamp(24px, 6vh, 48px) !important;
+    }
+    
+    /* 2. 键盘上方的首选和弦 (调小 1 号) */
+    .chord-primary-text {
+        font-size: clamp(20px, 5vh, 40px) !important;
+    }
+    
+    /* 3. 键盘上方的备选和弦及 OR (调小 1 号) */
+    .chord-secondary-text {
+        font-size: clamp(10px, 2.5vh, 16px) !important;
+    }
+}

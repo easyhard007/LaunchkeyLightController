@@ -41,17 +41,20 @@
         </h2>
         
         <div class="card" id="piano-card">
-            <!-- Pad 矩阵 -->
+            <!-- 模块1：虚拟 Pad 矩阵 -->
             <div id="pad-matrix"></div>
 
-            <!-- 和弦监控区 -->
-            <div id="pressed-notes">
-                <div style="height:100%; display:flex; justify-content:center; align-items:center; color:#666; font-size:16px;"></div>
-            </div>
-            
-            <!-- 钢琴键盘 -->
-            <div id="keyboard-wrapper">
-                <div id="keyboard"></div>
+            <!-- 【新增】：用来等分下半部分高度的包裹器 -->
+            <div id="piano-lower-half">
+                <!-- 模块2：和弦监控 -->
+                <div id="pressed-notes">
+                    <div style="height:100%; display:flex; justify-content:center; align-items:center; color:#666; font-size:16px;">等待弹奏...</div>
+                </div>
+                
+                <!-- 模块3：钢琴键盘 -->
+                <div id="keyboard-wrapper">
+                    <div id="keyboard"></div>
+                </div>
             </div>
         </div>
 
@@ -211,6 +214,7 @@
             if (typeof initPadMatrixDOM === 'function') initPadMatrixDOM(); 
             if (typeof initKeyboardDOM === 'function') initKeyboardDOM(); 
             if (typeof initColorPicker === 'function') initColorPicker();
+            if (typeof initBackground === 'function') initBackground();
             
             navigator.requestMIDIAccess({ sysex: true }).then(onMIDISuccess).catch(err => {
                 document.getElementById('status').innerText = "获取权限失败，请使用 HTTPS 环境";

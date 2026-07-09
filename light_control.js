@@ -105,16 +105,34 @@ function applyWaveEffect() {
     }
 }
 
+// === 核心修复 4：调色盘自适应大小 ===
 function initColorPicker() {
-    if (typeof initBackground === 'function') initBackground();
-    
+    const container = document.getElementById('color-picker-section');
+    // 根据父级容器当前实际可用宽度，动态算出最合理的尺寸 (留点内边距)
+    const initialWidth = Math.min(container.clientWidth * 0.8, container.clientHeight * 0.8, 180);
+
     colorPicker = new iro.ColorPicker("#color-picker-container", {
-        width: 180, color: "#aa00ff", layout: [ { component: iro.ui.Wheel } ]
+        width: initialWidth, 
+        color: "#aa00ff", 
+        layoutDirection: "horizontal", 
+        layout: [ { component: iro.ui.Wheel } ]
+    });
+
+    // 监听窗口尺寸变化，动态修正 iro 色环的大小！
+    window.addEventListener('resize', () => {
+        if (!colorPicker || !container) return;
+        // 算出新的可用尺寸
+        const newWidth = Math.min(container.clientWidth * 0.8, container.clientHeight * 0.8, 180);
+        colorPicker.resize(newWidth);
     });
 
     setTimeout(() => {
         if (typeof initTSDOverlay === 'function') initTSDOverlay();
     }, 100);
+    
+    // 初始化颜色数组 (代码保留不变)
+    const hsl = colorPicker.color.hsl;
+    window.padLightSources[0].userHSL = { h: hsl.h, s: hsl.s, l: 100 };
     
     requestAnimationFrame(engineLoop);
 }

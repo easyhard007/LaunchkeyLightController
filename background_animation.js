@@ -41,8 +41,12 @@ function calculateOptimalScale() {
 }
 
 function initBackground() {
+
     const container = document.getElementById('glcanvas');
+
     if (!container) return;
+
+    
 
     // 清理可能遗留的旧上下文
     container.innerHTML = ''; 
@@ -55,6 +59,8 @@ function initBackground() {
         powerPreference: 'high-performance',
         alpha: true
     });
+
+
     
     cbRenderer.outputColorSpace = THREE.SRGBColorSpace;
     // 限制像素比以节省性能 (尤其是手机端)
@@ -255,7 +261,6 @@ window.addEventListener('resize', () => {
 // 供 light_control.js 调用的外部接口
 function updateBackgroundState(volume, h, s, l) {
     if (!cbMaterial) return;
-    
     // 1. 接收物理音量 (由虚拟钢琴引擎计算出的 0.0 ~ 1.0 包络)
     cbTargetEnergy = volume;
     
@@ -268,6 +273,8 @@ function updateBackgroundState(volume, h, s, l) {
 
 // 主渲染循环
 function renderBackground() {
+
+
     if (!cbMaterial || !cbRenderer) return;
 
     const dt = cbClock.getDelta();

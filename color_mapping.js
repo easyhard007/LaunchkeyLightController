@@ -91,7 +91,15 @@ function drawTSDTriangle(size) {
         text.setAttribute("x", textPos.x);
         text.setAttribute("y", textPos.y);
         text.setAttribute("fill", "#ffffff");
-        text.setAttribute("font-size", "20px");
+        
+        // text.setAttribute("font-size", "20px");
+        // 【新增】：根据宽高比动态决定 SVG 字体大小
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        // 如果宽高比小于 3:4，字号调小 2 号 (比如从 20px 降到 16px)
+        const fontSize = (w / h < 0.75) ? "16px" : "20px";
+
+        text.setAttribute("font-size", fontSize);
         text.setAttribute("font-weight", "900");
         text.setAttribute("font-family", "sans-serif");
         text.setAttribute("text-anchor", "middle");
